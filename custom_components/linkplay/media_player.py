@@ -1466,7 +1466,11 @@ class LinkPlayDevice(MediaPlayerEntity):
                         code_detect = chardet.detect(title)['encoding']
                         title = title.decode(code_detect, errors='ignore')
                         title = re.sub(r'\[.*?\]\ *', '', title)  #  "\s*\[.*?\]\s*"," ",title)
-                        if title.find(' - ') != -1:
+                        if title.find('~~~~~') != -1:
+                            titles = title.split('~')
+                            self._media_artist = titles[0].strip()
+                            self._media_title = titles[1].strip()
+                        elif title.find(' - ') != -1:
                             titles = title.split(' - ')
                             self._media_artist = titles[0].strip()
                             self._media_title = titles[1].strip()
