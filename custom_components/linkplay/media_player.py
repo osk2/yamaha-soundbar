@@ -38,6 +38,7 @@ ATTR_LINKPLAY_GROUP = 'linkplay_group'
 ATTR_FWVER = 'firmware'
 ATTR_TRCNT = 'track_count'
 ATTR_TRCRT = 'track_current'
+ATTR_DEBUG = 'debug_info'
 
 PARALLEL_UPDATES = 0
 
@@ -321,7 +322,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._features = \
             SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | \
             SUPPORT_VOLUME_SET | SUPPORT_VOLUME_MUTE | \
-            SUPPORT_STOP | SUPPORT_PLAY
+            SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE
 
         elif self._playing_liveinput:
             self._features = \
@@ -430,9 +431,23 @@ class LinkPlayDevice(MediaPlayerEntity):
         attributes[ATTR_DEVICE_CLASS] = DEVICE_CLASS_SPEAKER
         if len(self._trackq) > 0:
             attributes[ATTR_TRCNT] = len(self._trackq) - 1
-        else:
-            attributes[ATTR_TRCNT] = 0
-        attributes[ATTR_TRCRT] = self._trackc
+            attributes[ATTR_TRCRT] = self._trackc
+        
+        if self._playing_localfile:
+            attributes[ATTR_DEBUG] = "_playing_localfile"
+
+        elif self._playing_spotify:
+            attributes[ATTR_DEBUG] = "_playing_spotify"
+        
+        elif self._playing_webplaylist:
+            attributes[ATTR_DEBUG] = "_playing_webplaylist"
+        
+        elif self._playing_stream:
+            attributes[ATTR_DEBUG] = "_playing_stream"
+
+        elif self._playing_liveinput:
+            attributes[ATTR_DEBUG] = "_playing_liveinput"
+
         return attributes
 
     @property
@@ -544,46 +559,57 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._position_updated_at = utcnow()
                 if self._slave_list is not None:
                     for slave in self._slave_list:
-                        slave.set_state(STATE_PLAYING)
+                        slave.set_state(self._state)
                         slave.set_position_updated_at(self.media_position_updated_at)
             else:
                 _LOGGER.warning("Failed to start or resume playback. Device: %s, Got response: %s", self.entity_id, value)
         else:
             self._master.media_play()
 
-    def media_play_pause(self):
-        """Send play/pause toggle command."""
-        if not self._slave_mode:
-            if self._state == STATE_IDLE:  # when stopped
-                self.media_play()
-                return
-
-            self._lpapi.call('GET', 'setPlayerCmd:onepause')
-            value = self._lpapi.data
-            if value == "OK":
-#                pass
-#                self.schedule_update_ha_state(True)
-                self._position_updated_at = utcnow()
-                if self._slave_list is not None:
-                    for slave in self._slave_list:
-                        slave.trigger_schedule_update(True)
-                        slave.set_position_updated_at(self.media_position_updated_at)
-            else:
-                _LOGGER.warning("Failed to onepause playback. Device: %s, Got response: %s", self.entity_id, value)
-        else:
-            self._master.media_play_pause()
+#    def media_play_pause(self):
+#        """Send play/pause toggle command."""
+#        if not self._slave_mode:
+#            if self._state == STATE_IDLE:  # when stopped
+#                self.media_play()
+#                return
+#
+#            if self._playing_stream:
+#                self._lpapi.call('GET', 'setPlayerCmd:stop')
+#            else:
+#                self._lpapi.call('GET', 'setPlayerCmd:onepause')
+#                
+#            value = self._lpapi.data
+#            if value == "OK":
+#                self._position_updated_at = utcnow()
+#                if self._playing_stream:
+#                    self._state = STATE_IDLE
+#                if self._slave_list is not None:
+#                    for slave in self._slave_list:
+#                        slave.set_position_updated_at(self.media_position_updated_at)
+#                        slave.set_state(self._state)
+#                        slave.trigger_schedule_update(True)
+#            else:
+#                _LOGGER.warning("Failed to onepause playback. Device: %s, Got response: %s", self.entity_id, value)
+#        else:
+#            self._master.media_play_pause()
 
     def media_pause(self):
         """Send pause command."""
         if not self._slave_mode:
+            if self._playing_stream:
+                # Pausing a live stream will cause a buffer overrun in hardware. Stop is the correct procedure in this case.
+                # If the stream is configured as an input source, when pressing Play after this, it will be started again (using self._prev_source).
+                self.media_stop()
+                return
+                
             self._lpapi.call('GET', 'setPlayerCmd:pause')
             value = self._lpapi.data
             if value == "OK":
-                self._state = STATE_PAUSED
                 self._position_updated_at = utcnow()
+                self._state = STATE_PAUSED
                 if self._slave_list is not None:
                     for slave in self._slave_list:
-                        slave.set_state(STATE_PAUSED)
+                        slave.set_state(self._state)
                         slave.set_position_updated_at(self.media_position_updated_at)
             else:
                 _LOGGER.warning("Failed to pause playback. Device: %s, Got response: %s", self.entity_id, value)
@@ -615,7 +641,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self.schedule_update_ha_state(True)
                 if self._slave_list is not None:
                     for slave in self._slave_list:
-                        slave.set_state(STATE_IDLE)
+                        slave.set_state(self._state)
                         slave.set_position_updated_at(self.media_position_updated_at)
             else:
                 _LOGGER.warning("Failed to stop playback. Device: %s, Got response: %s", self.entity_id, value)
@@ -813,8 +839,15 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._multiroom_group.append(self.entity_id)
             self._is_master = True
             self._wait_for_mcu = 2
+
         for slave in slaves:
+            if slave._is_master:
+                slave.unjoin_all()
+            
             if slave.entity_id not in self._multiroom_group:
+                if slave._slave_mode:
+                    slave.unjoin_me()
+                
                 if self._multiroom_wifidierct:
                     cmd = "ConnectMasterAp:ssid={0}:ch={1}:auth=OPEN:".format(self._ssid, self._wifi_channel) + "encry=NONE:pwd=:chext=0"
                 else:
@@ -905,7 +938,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._wait_for_mcu = 1
             if self._master is not None:
                 self._master.remove_from_group(self)
-                self._master._wait_for_mcu = 2
+                self._master._wait_for_mcu = 1
                 self._master.schedule_update_ha_state(True)
             self._master = None
             self._slave_mode = False
@@ -1574,10 +1607,13 @@ class LinkPlayDevice(MediaPlayerEntity):
     
     def update(self):
         """Get the latest player details from the device."""
+        if self._master is None:
+            self._slave_mode = False
+
         if self._slave_mode or self._snapshot_active:
             return True
             
-        if self._wait_for_mcu > 0:  # have wait for the unit to finish processing command, otherwise some reported status values will be incorrect
+        if self._wait_for_mcu > 0:  # have wait for the hardware unit to finish processing command, otherwise some reported status values will be incorrect
             time.sleep(self._wait_for_mcu)
             self._wait_for_mcu = 0
 
