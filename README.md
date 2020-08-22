@@ -305,6 +305,7 @@ There are quite a few manufacturers and devices that operate on the basis of Lin
 - **iLuv** (Aud Air, Aud Click Shower, Aud Click),
 - **JAM Audio** (Voice, Symphony, Rhythm),
 - **JD** (CrazyBoa 2Face),
+- **KEiiD**,
 - **Lowes** (Showbox),
 - **Magnavox** (MSH315V),
 - **Medion** (MD43631, MedionX MD43259),
