@@ -15,7 +15,7 @@ This **will overwrite** the previous **Linkplay Sound Devices Integration** comp
 - Configurable Icecast / Shoutcast webradio streams as additional input sources
 - Retrieval of current playing content metadata from Icecast / Shoutcast webradio streams and filenames on directly attached USB sticks
 - Retrieval of coverart from last.fm service based on current playing content metadata
-- Multirooom in both WiFi-Direct and Router mode, using standard 'join' and 'unjoin' service calls.
+- Multirooom in both WiFi-Direct and Router mode, using sonos-like standard 'join' and 'unjoin' service calls.
 - Recall of music presets stored on the device
 - Snapshot and restore state of the player for smooth usage with TTS
 - Browsing and playing media files from the directly attached USB sticks through Lovelace UI
