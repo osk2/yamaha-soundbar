@@ -566,33 +566,6 @@ class LinkPlayDevice(MediaPlayerEntity):
         else:
             self._master.media_play()
 
-#    def media_play_pause(self):
-#        """Send play/pause toggle command."""
-#        if not self._slave_mode:
-#            if self._state == STATE_IDLE:  # when stopped
-#                self.media_play()
-#                return
-#
-#            if self._playing_stream:
-#                self._lpapi.call('GET', 'setPlayerCmd:stop')
-#            else:
-#                self._lpapi.call('GET', 'setPlayerCmd:onepause')
-#                
-#            value = self._lpapi.data
-#            if value == "OK":
-#                self._position_updated_at = utcnow()
-#                if self._playing_stream:
-#                    self._state = STATE_IDLE
-#                if self._slave_list is not None:
-#                    for slave in self._slave_list:
-#                        slave.set_position_updated_at(self.media_position_updated_at)
-#                        slave.set_state(self._state)
-#                        slave.trigger_schedule_update(True)
-#            else:
-#                _LOGGER.warning("Failed to onepause playback. Device: %s, Got response: %s", self.entity_id, value)
-#        else:
-#            self._master.media_play_pause()
-
     def media_pause(self):
         """Send pause command."""
         if not self._slave_mode:
@@ -1441,24 +1414,24 @@ class LinkPlayDevice(MediaPlayerEntity):
             return True
 #        _LOGGER.debug('Looking for IceCast metadata: %s', self._name)
 
-        def NiceToICY(self):
-            class InterceptedHTTPResponse():
-                pass
-            import io
-            line = self.fp.readline().replace(b"ICY 200 OK\r\n", b"HTTP/1.0 200 OK\r\n")
-            InterceptedSelf = InterceptedHTTPResponse()
-            InterceptedSelf.fp = io.BufferedReader(io.BytesIO(line))
-            InterceptedSelf.debuglevel = self.debuglevel
-            InterceptedSelf._close_conn = self._close_conn
-            return ORIGINAL_HTTP_CLIENT_READ_STATUS(InterceptedSelf)
-        
-        ORIGINAL_HTTP_CLIENT_READ_STATUS = urllib.request.http.client.HTTPResponse._read_status
-        urllib.request.http.client.HTTPResponse._read_status = NiceToICY
+#        def NiceToICY(self):
+#            class InterceptedHTTPResponse():
+#                pass
+#            import io
+#            line = self.fp.readline().replace(b"ICY 200 OK\r\n", b"HTTP/1.0 200 OK\r\n")
+#            InterceptedSelf = InterceptedHTTPResponse()
+#            InterceptedSelf.fp = io.BufferedReader(io.BytesIO(line))
+#            InterceptedSelf.debuglevel = self.debuglevel
+#            InterceptedSelf._close_conn = self._close_conn
+#            return ORIGINAL_HTTP_CLIENT_READ_STATUS(InterceptedSelf)
+
+#        ORIGINAL_HTTP_CLIENT_READ_STATUS = urllib.request.http.client.HTTPResponse._read_status
+#        urllib.request.http.client.HTTPResponse._read_status = NiceToICY
 
         try:
             request = urllib.request.Request(self._media_uri, headers={'Icy-MetaData': 1})  # request metadata
             response = urllib.request.urlopen(request)
-        except (urllib.error):  #urllib.error.HTTPError
+        except (urllib.error.HTTPError):
             self._media_title = None
             self._media_artist = None
             self._icecast_name = None
