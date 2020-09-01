@@ -1431,7 +1431,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         try:
             request = urllib.request.Request(self._media_uri, headers={'Icy-MetaData': 1})  # request metadata
             response = urllib.request.urlopen(request)
-        except (urllib.error.HTTPError):
+        except:  # (urllib.error.HTTPError)
             self._media_title = None
             self._media_artist = None
             self._icecast_name = None
