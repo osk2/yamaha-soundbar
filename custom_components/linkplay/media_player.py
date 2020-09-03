@@ -995,7 +995,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         else:
             value = "No such command implemented."
 
-        _LOGGER.warning("Player %s executed command: %s, result: %s", self.entity_id, command, value)
+        _LOGGER.debug("Player %s executed command: %s, result: %s", self.entity_id, command, value)
 
         self.hass.components.persistent_notification.async_create("<b>Executed command:</b><br>{0}<br><b>Result:</b><br>{1}".format(command, value), title=self.entity_id)
 
@@ -1195,7 +1195,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         #_LOGGER.debug('getting status for %s', self._name)
         self._lpapi.call('GET', status)
         if self._lpapi.data is None:
-            _LOGGER.warning('Unable to connect to device: %s, %s', self.entity_id, self._name)
+            _LOGGER.debug('Unable to connect to device: %s, %s', self.entity_id, self._name)
             self._unav_throttle = True
             self._wait_for_mcu = 0
             self._state = STATE_UNAVAILABLE
@@ -1274,7 +1274,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         try:
             result = self._upnp_device.PlayQueue.SetSpotifyPreset(KeyIndex=presetnum)
         except:
-            _LOGGER.warning("SetSpotifyPreset UPNP error: %s, %s", self.entity_id, presetnum)
+            _LOGGER.debug("SetSpotifyPreset UPNP error: %s, %s", self.entity_id, presetnum)
             return
 
         result = str(result.get('Result'))
@@ -1283,7 +1283,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             preset_map = self._upnp_device.PlayQueue.GetKeyMapping()
             preset_map = preset_map.get('QueueContext')
         except:
-            _LOGGER.warning("GetKeyMapping UPNP error: %s", self.entity_id)
+            _LOGGER.debug("GetKeyMapping UPNP error: %s", self.entity_id)
             return
 
         xml_tree = ET.fromstring(preset_map)
@@ -1314,7 +1314,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         try:
             setmap = self._upnp_device.PlayQueue.SetKeyMapping(QueueContext=preset_map)
         except:
-            _LOGGER.warning("SetKeyMapping UPNP error: %s, %s", self.entity_id, preset_map)
+            _LOGGER.debug("SetKeyMapping UPNP error: %s, %s", self.entity_id, preset_map)
             return
 
     def _tracklist_via_upnp(self, media):
@@ -1889,7 +1889,7 @@ class LinkPlayTcpUartData:
         HEAD = '18 96 18 20 0b 00 00 00 c1 02 00 00 00 00 00 00 00 00 00 00 '
         CMHX = ' '.join(hex(ord(c))[2:] for c in cmd)
         self.data = None
-#        _LOGGER.warning("Sending to %s TCP command: %s", self._host, cmd)
+#        _LOGGER.debug("Sending to %s TCP command: %s", self._host, cmd)
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(5)
@@ -1902,14 +1902,14 @@ class LinkPlayTcpUartData:
                 pos = data.find("MCU")
 
             self.data = data[pos:(len(data)-2)]
-#            _LOGGER.warning("Received from %s TCP command result: %s", self._host, self.data)
+#            _LOGGER.debug("Received from %s TCP command result: %s", self._host, self.data)
             try:
                 s.close()
             except:
                 pass
 
         except socket.error as ex:
-#            _LOGGER.warning("Error sending TCP command: %s with %s", cmd, ex)
+#            _LOGGER.debug("Error sending TCP command: %s with %s", cmd, ex)
             self.data = None
 
 class LastFMRestData:
