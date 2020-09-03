@@ -12,8 +12,8 @@ This **will overwrite** the previous **Linkplay Sound Devices Integration** comp
 
 ## Supported features:
 - Configurable input sources list, to match choices in HA with the pyhsical inputs available on each device
-- Configurable Icecast / Shoutcast webradio streams as additional input sources
-- Retrieval of current playing content metadata from Icecast / Shoutcast webradio streams and filenames on directly attached USB sticks
+- Configurable Icecast webradio streams as additional input sources
+- Retrieval of current playing content metadata from Icecast webradio streams and filenames on directly attached USB sticks
 - Retrieval of coverart from last.fm service based on current playing content metadata
 - Multirooom in both WiFi-Direct and Router mode, using sonos-like standard 'join' and 'unjoin' service calls.
 - Recall of music presets stored on the device
