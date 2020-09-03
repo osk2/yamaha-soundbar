@@ -249,6 +249,7 @@ Intrerupt playback of a source, say a TTS message and resume playback afterwards
       data:
         entity_id: media_player.sound_room1
 ```
+Note the `delay`, that should be equal or more with the time it takes for the TTS to spkeak out the text, usually that's an average of 1 second for every 3 words spoken out.
 
 ## Specific commands
 
