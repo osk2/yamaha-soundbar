@@ -1937,6 +1937,6 @@ class LastFMRestData:
             self.data = response.text
 
         except requests.exceptions.RequestException as ex:
-             _LOGGER.debug("Error fetching data: %s from %s failed with %s", self._request, self._request.url, ex)
+            _LOGGER.debug("Error fetching data: %s from %s failed with %s", self._request, self._request.url, ex)
             self.data = None
  
