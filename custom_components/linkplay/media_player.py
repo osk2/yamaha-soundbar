@@ -972,7 +972,20 @@ class LinkPlayDevice(MediaPlayerEntity):
             from string import ascii_letters
             newkey = (''.join(choice(ascii_letters) for i in range(16)))
             self._lpapi.call('GET', 'setNetwork:1:{0}'.format(newkey))
-            value = self._lpapi.data + ", key: " + newkey
+            value = self._lpapi.data
+            if value == 'OK':
+                value = self._lpapi.data + ", key: " + newkey
+            else:
+                value = "key: " + newkey
+        elif command.find('SetApSSIDName:') == 0:
+            ssidnam = command.replace('SetApSSIDName:', '').strip()
+            if ssidnam != '':
+                self._lpapi.call('GET', 'setSSID:{0}'.format(ssidnam))
+                value = self._lpapi.data
+                if value == 'OK':
+                    value = self._lpapi.data + ", SoftAP SSID set to: " + ssidnam
+            else:
+                value == "SSID not specified correctly. You need 'SetApSSIDName: NewWifiName'"
         elif command.find('WriteDeviceNameToUnit:') == 0:
             devnam = command.replace('WriteDeviceNameToUnit:', '').strip()
             if devnam != '':
@@ -986,7 +999,9 @@ class LinkPlayDevice(MediaPlayerEntity):
         elif command == 'TimeSync':
             tme = time.strftime('%Y%m%d%H%M%S')
             self._lpapi.call('GET', 'timeSync:{0}'.format(tme))
-            value = self._lpapi.data + ", time: " + tme
+            value = self._lpapi.data
+            if value == 'OK':
+                value = self._lpapi.data + ", time: " + tme
         elif command == 'Rescan':
             self._unav_throttle = False
             self._first_update = True
@@ -995,7 +1010,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         else:
             value = "No such command implemented."
 
-        _LOGGER.debug("Player %s executed command: %s, result: %s", self.entity_id, command, value)
+        _LOGGER.warning("Player %s executed command: %s, result: %s", self.entity_id, command, value)
 
         self.hass.components.persistent_notification.async_create("<b>Executed command:</b><br>{0}<br><b>Result:</b><br>{1}".format(command, value), title=self.entity_id)
 
