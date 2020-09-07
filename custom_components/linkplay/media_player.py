@@ -1623,6 +1623,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                         self._ssid = self._ssid.decode()
                         try:
                             self._name = device_status['DeviceName']
+
                         except KeyError:
                             pass
                         try:
@@ -1871,10 +1872,11 @@ class LinkPlayRestData:
             with requests.Session() as sess:
                 response = sess.send(
                     self._request, timeout=5)
-            self.data = response.text
+#            self.data = response.text
+            self.data = str(response.content, 'utf-8', errors='replace')
 
         except requests.exceptions.RequestException as ex:
-#            _LOGGER.warning("Error fetching data: %s from %s failed with %s", self._request, self._request.url, ex)
+            _LOGGER.debug("Error fetching data: %s from %s failed with %s", self._request, self._request.url, ex)
             self.data = None
 
 class LinkPlayTcpUartData:
@@ -1909,7 +1911,7 @@ class LinkPlayTcpUartData:
                 pass
 
         except socket.error as ex:
-#            _LOGGER.debug("Error sending TCP command: %s with %s", cmd, ex)
+            _LOGGER.debug("Error sending TCP command: %s with %s", cmd, ex)
             self.data = None
 
 class LastFMRestData:
@@ -1927,7 +1929,7 @@ class LastFMRestData:
         resource = "{0}{1}&{2}&api_key={3}&format=json".format(
             LASTFM_API_BASE, cmd, params, self._api_key)
         self._request = requests.Request(method, resource).prepare()
-        _LOGGER.debug("Updating LastFMRestData from %s", self._request.url)
+#        _LOGGER.debug("Updating LastFMRestData from %s", self._request.url)
         try:
             with requests.Session() as sess:
                 response = sess.send(
@@ -1935,6 +1937,6 @@ class LastFMRestData:
             self.data = response.text
 
         except requests.exceptions.RequestException as ex:
-            # _LOGGER.warning("Error fetching data: %s from %s failed with %s", self._request, self._request.url, ex)
+             _LOGGER.debug("Error fetching data: %s from %s failed with %s", self._request, self._request.url, ex)
             self.data = None
  
