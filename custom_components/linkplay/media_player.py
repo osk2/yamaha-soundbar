@@ -1427,7 +1427,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         """Update track info from icecast stream."""
         if self._icecast_meta == 'Off':
             return True
-#        _LOGGER.debug('Looking for IceCast metadata: %s', self._name)
+        _LOGGER.debug('Looking for IceCast metadata: %s', self._name)
 
 #        def NiceToICY(self):
 #            class InterceptedHTTPResponse():
@@ -1454,11 +1454,13 @@ class LinkPlayDevice(MediaPlayerEntity):
             return True
 
         icy_name = response.headers['icy-name']
-        if icy_name is not None and icy_name != 'no name' and icy_name != 'Unspecified name':
+        if icy_name is not None and icy_name != 'no name' and icy_name != 'Unspecified name' and icy_name != '-':
             try:  # 'latin1' # default: iso-8859-1 for mp3 and utf-8 for ogg streams
                 self._icecast_name = icy_name.encode('latin1').decode('utf-8')
             except (UnicodeDecodeError):
                 self._icecast_name = icy_name
+
+            _LOGGER.debug('For: %s found icy_name: %s', self._name, '"' + icy_name + '"')
 
         else:
             self._icecast_name = None
@@ -1479,28 +1481,46 @@ class LinkPlayDevice(MediaPlayerEntity):
                 response.read(metaint)  # skip to metadata
                 metadata_length = struct.unpack('B', response.read(1))[0] * 16  # length byte
                 metadata = response.read(metadata_length).rstrip(b'\0')
+
+                _LOGGER.debug('For: %s found metadata: %s', self._name, metadata)
                 # extract title from the metadata
-                m = re.search(br"StreamTitle='([^']*)';", metadata)
+                # m = re.search(br"StreamTitle='([^']*)';", metadata)
+                m = re.search(br"StreamTitle='(.*)';", metadata)
+                _LOGGER.debug('For: %s found m: %s', self._name, m)
                 if m:
-                    title = m.group(1)
+                    title = m.group(0)
+                    _LOGGER.debug('For: %s found title: %s', self._name, title)
+
                     if title:
                         code_detect = chardet.detect(title)['encoding']
                         title = title.decode(code_detect, errors='ignore')
+                        titlek = title.split("';")
+                        title = titlek[0]
+                        titlem = title.split("='")
+                        title = titlem[1]
+                        _LOGGER.debug('For: %s found decoded title: %s', self._name, title)
+
                         title = re.sub(r'\[.*?\]\ *', '', title)  #  "\s*\[.*?\]\s*"," ",title)
-                        if title.find('~~~~~') != -1:
+                        if title.find('~~~~~') != -1:  # for United Music Subasio servers
                             titles = title.split('~')
-                            self._media_artist = titles[0].strip()
-                            self._media_title = titles[1].strip()
-                        elif title.find(' - ') != -1:
+                            self._media_artist = titles[0].strip().title()
+                            self._media_title = titles[1].strip().title()
+                        elif title.find(' - ') != -1:  # for ordinary Icecast servers
                             titles = title.split(' - ')
-                            self._media_artist = titles[0].strip()
-                            self._media_title = titles[1].strip()
+                            self._media_artist = titles[0].strip().title()
+                            self._media_title = titles[1].strip().title()
                         else:
                             if self._icecast_name is not None:
                                 self._media_artist = '[' + self._icecast_name + ']'
                             else:
                                 self._media_artist = None
-                            self._media_title = title
+                            self._media_title = title.title()
+
+                        if self._media_artist == '-':
+                            self._media_artist = None
+                        if self._media_title == '-':
+                            self._media_title = None
+
                         break
                 else:
                     if self._icecast_name is not None:
@@ -1518,6 +1538,9 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._media_artist = None
             self._media_image_url = None
 
+        _LOGGER.debug('For: %s stated media_title: %s', self._name, self._media_title)
+        _LOGGER.debug('For: %s stated media_artist: %s', self._name, self._media_artist)
+
     def _get_playerstatus_metadata(self, plr_stat):
         try:
             if plr_stat['uri'] != "":
@@ -1534,7 +1557,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             except ValueError:
                 title = plr_stat['Title']
             if title.lower() != 'unknown':
-                self._media_title = title
+                self._media_title = title.title()
                 if self._trackc == None:
                     self._trackc = title
             else:
@@ -1545,7 +1568,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             except ValueError:
                 artist = plr_stat['Artist']
             if artist.lower() != 'unknown':
-                self._media_artist = artist
+                self._media_artist = artist.title()
             else:
                 self._media_artist = None
         if plr_stat['Album'] != '':
@@ -1787,10 +1810,10 @@ class LinkPlayDevice(MediaPlayerEntity):
                         title.replace('_', ' ')
                         if title.find(' - ') != -1:
                             titles = title.split(' - ')
-                            self._media_artist = titles[0].strip().strip('-')
-                            self._media_title = titles[1].strip().strip('-')
+                            self._media_artist = titles[0].strip().strip('-').title()
+                            self._media_title = titles[1].strip().strip('-').title()
                         else:
-                            self._media_title = title.strip().strip('-')
+                            self._media_title = title.strip().strip('-').title()
                     else:
                         self._media_title = self._source
 
