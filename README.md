@@ -139,8 +139,13 @@ You can specify multiple entity ids separated by comma or use `all` to run the s
 - USB audio files playback (track will restart from the beginning)
 - Spotify (snapshot will use the device's highest preset number to store and recall the current playlist, playback may restart the same track or not, depends on Spotify settings).
 
+## Media Browser
+
+For devices with an USB port, make sure that in the sources configuration you have specified a `udisk` entry. Plug in a USB stick with MP3s on it, and switch to that source in Home Assistant. The Media Browser will populate with the list of files present on the stick, clicking a file will start playing it.
 
 ## Browsing media files through Lovelace UI
+
+This is deprecated. Use Media Browser as above.
 
 Some device models equipped with an USB port can play music from directly attached USB sticks. There are two services, `linkplay.get_tracks` and `linkplay.play_track` which allow reading the list of the files into an `input_select`, and trigger playback when selecting a file from the list. Here's how to set this up, with the list automatically filling itself when changing to USB:
 
