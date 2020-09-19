@@ -755,6 +755,9 @@ class LinkPlayDevice(MediaPlayerEntity):
             if temp_source == None:
                 return
 
+            if temp_source == "udisk":
+                self._tracklist_via_upnp("USB")
+
             if len(self._source_list) > 0:
                 prev_source = next((k for k in self._source_list if self._source_list[k] == self._source), None)
 
@@ -940,7 +943,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         else:
             _LOGGER.warning("Failed to unjoin_all multiroom. " "Device: %s, Got response: %s", self.entity_id, value)
-     
+
     def unjoin_me(self):
         """Disconnect myself from the multiroom configuration."""
         if self._multiroom_wifidierct:
@@ -1391,14 +1394,14 @@ class LinkPlayDevice(MediaPlayerEntity):
             queuename = 'USBDiskQueue'  # 'CurrentQueue'  # 'USBDiskQueue'
             rootdir = ROOTDIR_USB
         else:
-            _LOGGER.warning("Tracklist retrieval: %s, %s is not supported. You can use only 'USB' for now.", self.entity_id, media_info)
+            _LOGGER.debug("Tracklist retrieval: %s, %s is not supported. You can use only 'USB' for now.", self.entity_id, media_info)
             self._trackq = []
             return
 
         try:
             media_info = self._upnp_device.PlayQueue.BrowseQueue(QueueName=queuename)
         except:
-            _LOGGER.warning("Tracklist get error, media not present?: %s, %s", self.entity_id, media)
+            _LOGGER.debug("Tracklist get error, media not present?: %s, %s", self.entity_id, media)
             self._trackq = []
             return
 
@@ -1418,9 +1421,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                            trackq.append(tracku)
 
         if len(trackq) > 0:
-            trackq.insert(0, '____ ' + self._name + ' ____')
             self._trackq = trackq
-
 
     async def async_browse_media(self, media_content_type=None, media_content_id=None):
         """Implement the websocket media browsing helper."""
@@ -1431,47 +1432,8 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         if len(self._trackq) <= 0:
             raise BrowseError(
-                f"Media not found. Please switch to USB source."
+                f"Media not found. Please insert/select " + self._source_list.get("udisk", "USB Disk")
             )
-
-#        await self.hass.async_add_executor_job(self._tracklist_via_upnp("USB"))
-#        rootdir = ROOTDIR_USB
-
-#        media_info = await self.hass.async_add_executor_job(self._upnp_device.PlayQueue.BrowseQueue(QueueName='USBDiskQueue'))  # 'CurrentQueue'  # 'USBDiskQueue'
-
-#        try:
-#            media_info = self._upnp_device.PlayQueue.BrowseQueue(QueueName='USBDiskQueue')  # 'CurrentQueue'  # 'USBDiskQueue'
-#            #media_info = await self._upnp_device.PlayQueue.BrowseQueue(QueueName='USBDiskQueue')  # 'CurrentQueue'  # 'USBDiskQueue'
-#            #media_info = await self.hass.async_add_executor_job(self._upnp_device.PlayQueue.BrowseQueue(QueueName='USBDiskQueue'))
-#        except:
-#            raise BrowseError(
-#                f"Media not found: {media_content_type} / {media_content_id}"
-#            )
-#            return
-
-#        media_info = media_info.get('QueueContext')
-#        if media_info is None:
-#            return
-
-#        xml_tree = ET.fromstring(media_info)
-
-#        trackq = []
-#        for playlist in xml_tree:
-#           for tracks in playlist:
-#               for track in tracks:
-#                   if track.tag == 'URL':
-#                       if rootdir in track.text:
-#                           tracku = track.text.replace(rootdir, '')
-#                           trackq.append(tracku)
-
-#        if len(trackq) > 0:
-#            self._trackq = trackq
-#        else:
-#            raise BrowseError(
-#                f"Media not found: {media_content_type} / {media_content_id}"
-#            )
-
-#        _LOGGER.debug("Retrieved tracklist: %s, tracklist: %s", self.entity_id, self._trackq)
 
         radio = [
             BrowseMedia(
@@ -1482,8 +1444,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 can_play=True,
                 can_expand=False,
             )
-            for index, preset in enumerate(self._trackq, start=0)
-#            for index, preset in enumerate(trackq, start=1)
+            for index, preset in enumerate(self._trackq, start=1)
         ]
 
         root = BrowseMedia(
@@ -1819,6 +1780,8 @@ class LinkPlayDevice(MediaPlayerEntity):
                             self._position_updated_at = utcnow()
                             self._duration = 0
                             self._playhead_position = 0
+                            if "udisk" in self._source_list:
+                                self._tracklist_via_upnp("USB")
                             self._first_update = False
 
             if self._multiroom_group == []:
@@ -1913,12 +1876,11 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._state = STATE_PLAYING
                 self._media_title = self._source
 
-            if player_status['mode'] in ['11', '16']:
-                if len(self._trackq) <= 0:
+            if player_status['mode'] in ['11', '16'] and len(self._trackq) <= 0:
+                if int(player_status['curpos']) > 6000 and self._state == STATE_PLAYING:
                     self._tracklist_via_upnp("USB")
 
             if self._playing_spotify:
-                #self._state = STATE_PLAYING
                 self._update_via_upnp()
 
             elif self._playing_webplaylist:
