@@ -141,7 +141,7 @@ You can specify multiple entity ids separated by comma or use `all` to run the s
 
 ## Media Browser
 
-For devices with an USB port, make sure that in the sources configuration you have specified a `udisk` entry. Plug in a USB stick with MP3s on it, and switch to that source in Home Assistant. The Media Browser will populate with the list of files present on the stick, clicking a file will start playing it.
+For devices with an USB port, make sure that in the sources configuration you have specified a `udisk` entry. Plug in a USB stick with MP3s on it, and switch to that source in Home Assistant (some models switch to USB automatically as soon as you connect a USB drive). The Media Browser will populate with the list of files present on the stick, clicking a file will start playing it.
 
 ## Browsing media files through Lovelace UI
 
