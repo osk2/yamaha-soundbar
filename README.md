@@ -143,59 +143,6 @@ You can specify multiple entity ids separated by comma or use `all` to run the s
 
 For devices with an USB port, make sure that in the sources configuration you have specified a `udisk` entry. Plug in a USB stick with MP3s on it, and switch to that source in Home Assistant (some models switch to USB automatically as soon as you connect a USB drive). The Media Browser will populate with the list of files present on the stick, clicking a file will start playing it.
 
-## Browsing media files through Lovelace UI
-
-This is deprecated. Use Media Browser as above.
-
-Some device models equipped with an USB port can play music from directly attached USB sticks. There are two services, `linkplay.get_tracks` and `linkplay.play_track` which allow reading the list of the files into an `input_select`, and trigger playback when selecting a file from the list. Here's how to set this up, with the list automatically filling itself when changing to USB:
-
-Add to `configuration.yaml`:
-```yaml
-input_select:
-  tracks_room1:
-    name: Room1 music list
-    icon: mdi:music
-    options:
-      - "____ Room1 ____"
-    initial: "____ Room1 ____"
-```
-Tip: at `Room1` you should specify the same name that you used when you named the device in the Android app. Keep the underscores.
-
-Add to your automations the followings (load the list when changing source to `USB stick`; clear the list when changing to other source; play the selected track):
-```yaml
-- alias: 'Music list load'
-  trigger:
-    platform: template
-    value_template: "{% if is_state_attr('media_player.sound_room1', 'source', 'USB stick') %}True{% endif %}"
-  action:
-    - service: linkplay.get_tracks
-      data:
-        entity_id: media_player.sound_room1
-        input_select: input_select.tracks_room1
-
-- alias: 'Music list clear'
-  trigger:
-    platform: template
-    value_template: "{% if not(is_state_attr('media_player.sound_room1', 'source', 'USB stick')) %}True{% endif %}"
-  action:
-    - service: input_select.set_options
-      data:
-        entity_id: input_select.tracks_room1
-        options:
-          - "____ Room1 ____"
-
-- alias: 'Music list play selected track'
-  trigger:
-    - platform: state
-      entity_id: input_select.tracks_room1
-  action:
-    - service: linkplay.play_track
-      data:
-        entity_id: media_player.sound_room1
-        track: "{{ states('input_select.tracks_room1') }}"
-```
-You can use @mattieha's [Select List Card](https://github.com/mattieha/select-list-card) to display the input_select in Lovelace as scrollable list.
-
 ## Automation examples
 
 Play a webradio stream directly:
@@ -255,6 +202,54 @@ Intrerupt playback of a source, say a TTS message and resume playback afterwards
         entity_id: media_player.sound_room1
 ```
 Note the `delay`, that should be equal or more with the time it takes for the TTS to spkeak out the text, usually that's an average of 1 second for every 3 words spoken out.
+
+Browsing media files through Lovelace UI:
+_This is deprecated, but left here as a reference. Use Media Browser as described above._
+Some device models equipped with an USB port can play music from directly attached USB sticks. There are two services, `linkplay.get_tracks` and `linkplay.play_track` which allow reading the list of the files into an `input_select`, and trigger playback when selecting a file from the list. Here's how to set this up, with the list automatically filling itself when changing to USB.
+Add to `configuration.yaml`:
+```yaml
+input_select:
+  tracks_room1:
+    name: Room1 music list
+    icon: mdi:music
+    options:
+      - "____ Room1 ____"
+    initial: "____ Room1 ____"
+```
+Add to your automations the followings (load the list when changing source to `USB stick`; clear the list when changing to other source; play the selected track):
+```yaml
+- alias: 'Music list load'
+  trigger:
+    platform: template
+    value_template: "{% if is_state_attr('media_player.sound_room1', 'source', 'USB stick') %}True{% endif %}"
+  action:
+    - service: linkplay.get_tracks
+      data:
+        entity_id: media_player.sound_room1
+        input_select: input_select.tracks_room1
+
+- alias: 'Music list clear'
+  trigger:
+    platform: template
+    value_template: "{% if not(is_state_attr('media_player.sound_room1', 'source', 'USB stick')) %}True{% endif %}"
+  action:
+    - service: input_select.set_options
+      data:
+        entity_id: input_select.tracks_room1
+        options:
+          - "____ Room1 ____"
+
+- alias: 'Music list play selected track'
+  trigger:
+    - platform: state
+      entity_id: input_select.tracks_room1
+  action:
+    - service: linkplay.play_track
+      data:
+        entity_id: media_player.sound_room1
+        track: "{{ states('input_select.tracks_room1') }}"
+```
+You can use @mattieha's [Select List Card](https://github.com/mattieha/select-list-card) to display the input_select in Lovelace as scrollable list.
 
 ## Specific commands
 
