@@ -154,7 +154,7 @@ Play a sound file located on an http server or a webradio stream:
         media_content_type: url
 ```
 
-Play the first sound file located on the local storage directly attached to the device:
+Play the first sound file located on the local storage directly attached to the device (folder\files order seen by the chip seems to be alphabetic):
 ```yaml
     - service: media_player.play_media
       data:
