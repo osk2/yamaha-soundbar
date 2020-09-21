@@ -145,13 +145,22 @@ For devices with an USB port, make sure that in the sources configuration you ha
 
 ## Automation examples
 
-Play directly a sound file located on an http server or a webradio stream:
+Play a sound file located on an http server or a webradio stream:
 ```yaml
     - service: media_player.play_media
       data:
         entity_id: media_player.sound_room1
         media_content_id: 'http://icecast.streamserver.tld/mountpoint.mp3'
         media_content_type: url
+```
+
+Play the first sound file located on the local storage directly attached to the device:
+```yaml
+    - service: media_player.play_media
+      data:
+        entity_id: media_player.sound_room1
+        media_content_id: '1'
+        media_content_type: music
 ```
 
 Select an input and set volume and unmute via an automation:
