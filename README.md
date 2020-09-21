@@ -145,7 +145,7 @@ For devices with an USB port, make sure that in the sources configuration you ha
 
 ## Automation examples
 
-Play a webradio stream directly:
+Play directly a sound file located on an http server or a webradio stream:
 ```yaml
     - service: media_player.play_media
       data:
