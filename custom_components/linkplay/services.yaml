@@ -51,6 +51,9 @@ command:
     command:
       description: 'Reboot, Rescan, PromptEnable, PromptDisable, WriteDeviceNameToUnit: My Device Name, SetApSSIDName: NewWifiName, SetRandomWifiKey, TimeSync, RouterMultiroomEnable'
       example: Rescan
+    notify:
+      description: Displays the result of the command as a persistent notification in Lovelace UI (optional, defaults to True). Set to False during automations to avoid seeing these.
+      example: False
 
 get_tracks:
   description: Retrieve the list of audio files available on the storage disk connected to the player, and fill an input_select with it.
