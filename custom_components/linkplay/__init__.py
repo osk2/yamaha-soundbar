@@ -24,6 +24,7 @@ SERVICE_PLAY = 'play_track'
 ATTR_MASTER = 'master'
 ATTR_PRESET = 'preset'
 ATTR_CMD = 'command'
+ATTR_NOTIF = 'notify'
 ATTR_SNAP = 'switchinput'
 ATTR_SELECT = 'input_select'
 ATTR_SOURCE = 'source'
@@ -44,7 +45,8 @@ PRESET_BUTTON_SCHEMA = vol.Schema({
 
 CMND_SERVICE_SCHEMA = vol.Schema({
     vol.Required(ATTR_ENTITY_ID): cv.comp_entity_ids,
-    vol.Required(ATTR_CMD): cv.string
+    vol.Required(ATTR_CMD): cv.string,
+    vol.Optional(ATTR_NOTIF, default=True): cv.boolean
 })
 
 REST_SERVICE_SCHEMA = vol.Schema({
@@ -115,10 +117,11 @@ def setup(hass, config):
 
         elif service.service == SERVICE_CMD:
             command = service.data.get(ATTR_CMD)
+            notify = service.data.get(ATTR_NOTIF)
             for device in entities:
                 if device.entity_id in entity_ids:
                     _LOGGER.debug("**COMMAND** entity: %s; command: %s", device.entity_id, command)
-                    device.execute_command(command)
+                    device.execute_command(command, notify)
 
         elif service.service == SERVICE_SNAP:
             switchinput = service.data.get(ATTR_SNAP)
