@@ -239,7 +239,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._playing_spotify = False
         self._playing_webplaylist = False
         self._slave_list = None
-        self._multiroom_wifidierct = False
+        self._multiroom_wifidirect = False
         self._multiroom_group = []
         self._multiroom_prevsrc = None
         self._multiroom_unjoinat = None
@@ -517,7 +517,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     def set_volume_level(self, volume):
         """Set volume level, input range 0..1, linkplay device 0..100."""
         volume = str(round(int(volume * MAX_VOL)))
-        if not (self._slave_mode and self._multiroom_wifidierct):
+        if not (self._slave_mode and self._multiroom_wifidirect):
 
             if self._fadevol:
                 voldiff = int(self._volume) - int(volume)
@@ -558,8 +558,11 @@ class LinkPlayDevice(MediaPlayerEntity):
 
     def mute_volume(self, mute):
         """Mute (true) or unmute (false) media player."""
-        if not (self._slave_mode and self._multiroom_wifidierct):
-            self._lpapi.call('GET', 'setPlayerCmd:mute:{0}'.format(str(int(mute))))
+        if not (self._slave_mode and self._multiroom_wifidirect):
+            if self._is_master:
+                self._lpapi.call('GET', 'setPlayerCmd:slave_mute:{0}'.format(str(mute)))
+            else:
+                self._lpapi.call('GET', 'setPlayerCmd:mute:{0}'.format(str(int(mute))))
             value = self._lpapi.data
             if value == "OK":
                 self._muted = bool(int(mute))
@@ -639,6 +642,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             if self._playing_spotify or self._playing_liveinput:
                 self._lpapi.call('GET', 'setPlayerCmd:switchmode:wifi')
                 time.sleep(0.3)
+
             self._lpapi.call('GET', 'setPlayerCmd:stop')
             value = self._lpapi.data
             if value == "OK":
@@ -803,7 +807,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._lpapi.call('GET', 'setPlayerCmd:switchmode:{0}'.format(temp_source))
                 value = self._lpapi.data
                 if value == "OK":
-                    if temp_source and (temp_source == 'udisk' or temp_source == 'TFcard'):
+                    if temp_source and temp_source in ['udisk', 'TFcard']:
                         self._wait_for_mcu = 2    # switching to locally stored files -> time to report correct volume value at update
                     else:
                         self._wait_for_mcu = 0.6  # switching to a physical input -> time to report correct volume value at update
@@ -886,7 +890,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     slave.unjoin_me()
 
                 slave.set_previous_source(True)
-                if self._multiroom_wifidierct:
+                if self._multiroom_wifidirect:
                     cmd = "ConnectMasterAp:ssid={0}:ch={1}:auth=OPEN:".format(self._ssid, self._wifi_channel) + "encry=NONE:pwd=:chext=0"
                 else:
                     cmd = 'ConnectMasterAp:JoinGroupMaster:eth{0}:wifi0.0.0.0'.format(self._host)
@@ -935,7 +939,6 @@ class LinkPlayDevice(MediaPlayerEntity):
             for slave_id in self._multiroom_group:
                 for device in self.hass.data[DOMAIN].entities:
                     if device.entity_id == slave_id and device.entity_id != self.entity_id:
-#                        device.set_wait_for_mcu(2)
                         device.set_slave_mode(False)
                         device.set_is_master(False)
                         device.set_slave_ip(None)
@@ -952,7 +955,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 
     def unjoin_me(self):
         """Disconnect myself from the multiroom configuration."""
-        if self._multiroom_wifidierct:
+        if self._multiroom_wifidirect:
             for dev in self._multiroom_group:
                 for device in self.hass.data[DOMAIN].entities:
                     if device._is_master:
@@ -967,7 +970,6 @@ class LinkPlayDevice(MediaPlayerEntity):
             value = self._lpapi.data
 
         if value == "OK":
-#            self._wait_for_mcu = 2
             if self._master is not None:
                 self._master.remove_from_group(self)
                 self._master._wait_for_mcu = 1
@@ -1002,7 +1004,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 #                    player.trigger_schedule_update(True)
                     player.set_position_updated_at(utcnow())
 
-    def execute_command(self, command):
+    def execute_command(self, command, notif):
         """Execute desired command against the player using factory API."""
         if command.find('MCU') == 0:
             self._tcpapi.call(command)
@@ -1064,7 +1066,8 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         _LOGGER.warning("Player %s executed command: %s, result: %s", self.entity_id, command, value)
 
-        self.hass.components.persistent_notification.async_create("<b>Executed command:</b><br>{0}<br><b>Result:</b><br>{1}".format(command, value), title=self.entity_id)
+        if notif:
+            self.hass.components.persistent_notification.async_create("<b>Executed command:</b><br>{0}<br><b>Result:</b><br>{1}".format(command, value), title=self.entity_id)
 
     def snapshot(self, switchinput):
         """Snapshot the current input source and the volume level of it """
@@ -1165,9 +1168,9 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._slave_mode = slave_mode
         self.schedule_update_ha_state(True)
 
-    def set_previous_source(self, wtf):
+    def set_previous_source(self, srcbool):
         """Memorize what was the previous source before entering multiroom."""
-        if wtf:
+        if srcbool:
             self._multiroom_prevsrc = self._source
         else:
             self._multiroom_prevsrc = None
@@ -1740,7 +1743,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             return True
 
         if self._multiroom_unjoinat is not None:
-            if self._multiroom_wifidierct:
+            if self._multiroom_wifidirect:
                 waittim = MROOM_UJWDIR
             else:
                 waittim = MROOM_UJWROU
@@ -1784,7 +1787,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         if isinstance(player_status, dict):
             self._unav_throttle = False
-            if self._first_update or (self._state == STATE_UNAVAILABLE or self._multiroom_wifidierct):
+            if self._first_update or (self._state == STATE_UNAVAILABLE or self._multiroom_wifidirect):
                 self._lpapi.call('GET', 'getStatus')
                 device_api_result = self._lpapi.data
                 if device_api_result is not None:
@@ -1816,9 +1819,9 @@ class LinkPlayDevice(MediaPlayerEntity):
                             self._uuid = device_status['uuid']  # FF31F09E - Arylic
                         except KeyError:
                             self._uuid = ''
-                        if not self._multiroom_wifidierct and self._fw_ver:
+                        if not self._multiroom_wifidirect and self._fw_ver:
                             if self._fwvercheck(self._fw_ver) < self._fwvercheck(FW_MROOM_RTR_MIN):
-                                self._multiroom_wifidierct = True
+                                self._multiroom_wifidirect = True
 
                         if self._upnp_device is None and self._name is not None:
                             for entry in self.upnp_discover(UPNP_TIMEOUT):
