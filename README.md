@@ -88,7 +88,7 @@ If you don't want a source selector to be available at all, set option to `sourc
 
 Linkplay devices support multiroom in two modes:
 - WiFi direct mode, where the master turns into a hidden AP and the slaves connect diretcly to it. The advantage is that this is a dedicated direct connection between the speakers, with network parameters optimized by the factory for streaming. Disadvantage is that switching of the stream is slower, plus the coverage can be limited due to the building's specifics. This is the default method used by the Android app to create multirooms.
-- Router mode, where the master and slaves connect to each other through the local network (from firmware v4.2.8020 up). The advantage is that all speakers remain connected to the existing network, swicthing the stream happens faster, and the coverage can be bigger being ensured by the network infrastructure of the building (works through multiple interconnected APs and switches). Disadvantage is that the network is not dedicated and it's the user responsibility to provide proper network infrastructure for reliable streaming.
+- Router mode, where the master and slaves connect to each other through the local network (from firmware v4.2.8020 up). The advantage is that all speakers remain connected to the existing network, swicthing the stream happens faster, and the coverage can be bigger being ensured by the network infrastructure of the building (works through multiple interconnected APs and switches). Disadvantage is that the network is not dedicated and it's the user responsibility to provide proper network infrastructure for reliable streaming. 
 
 This integration will autodetect the firmware version running on the player and choose multiroom mode accordingly. Units with firmware version lower than v4.2.8020 can connect to multirooms only in wifi-direct mode. Can be overriden with option `multiroom_wifidirect: True`, and is needed only for units with newer versions if the user has a mix of players running old and new firmware. Firmware version number can be seen in device attributes. 
 
@@ -106,6 +106,8 @@ To exit from the multiroom group, use the entity ids of the players that need to
         entity_id: media_player.sound_room1
 ```
 These services are compatible out of the box with the speaker group object in @kalkih's [Mini Media Player](https://github.com/kalkih/mini-media-player) card for Lovelace UI.
+
+*Tip*: if you experience temporary `Unavailable` status on the slaves afer unjoining from a multiroom group in router mode, run once the Linkplay-specific command `RouterMultiroomEnable` - see details further down.
 
 ## Presets
 
@@ -277,7 +279,7 @@ Implemented commands:
 - `SetRandomWifiKey`- perhaps as an extra security feature, one could make an automation to change the keys on the APs to some random values periodically.
 - `TimeSync` - is for units on networks not connected to internet to compensate for an unreachable NTP server. Correct time is needed for the alarm clock functionality (not implemented yet here)
 - `Reboot` - as name implies (a soft-reboot, only seems to restart the main loop in the Linkplay module, not MCU or other part).
-- `RouterMultiroomEnable` - theoretically router mode is enabled by default in firmwares above v4.2.8020, but there’s also a logic included to build it up, this command ensures to set the good priority. Only use if you have issues with multiroom in router mode.
+- `RouterMultiroomEnable` - router mode is available by default in firmwares above v4.2.8020, but there’s also a logic included to build it up, this command ensures to set the good priority. Only use if you have issues with multiroom in router mode.
 
 Results will appear in Lovelace UI's left pane as persistent notifications which can be dismissed. You can specify multiple entity ids separated by comma or use `all` to run the service against.
 
