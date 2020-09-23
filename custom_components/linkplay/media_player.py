@@ -1363,13 +1363,13 @@ class LinkPlayDevice(MediaPlayerEntity):
 
     def _preset_snap_via_upnp(self, presetnum):
         """Retrieve tracks list queue via UPNP."""
-        if self._upnp_device is None and not self._playing_spotify:
+        if self._upnp_device is None or not self._playing_spotify:
             return
 
         try:
             result = self._upnp_device.PlayQueue.SetSpotifyPreset(KeyIndex=presetnum)
         except:
-            _LOGGER.debug("SetSpotifyPreset UPNP error: %s, %s, result: %s", self.entity_id, presetnum, result)
+            _LOGGER.debug("SetSpotifyPreset UPNP error: %s, %s", self.entity_id, presetnum)
             return
 
         result = str(result.get('Result'))
@@ -1961,6 +1961,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._media_album = None
                     self._media_image_url = None
                     self._icecast_name = None
+                    self._playing_tts = False
 
                 if self._playing_localfile and self._state in [STATE_PLAYING, STATE_PAUSED] and not self._playing_tts:
                     self._get_playerstatus_metadata(player_status)
@@ -2140,4 +2141,4 @@ class LastFMRestData:
         except requests.exceptions.RequestException as ex:
             _LOGGER.debug("Error fetching data: %s from %s failed with %s", self._request, self._request.url, ex)
             self.data = None
- 
+# END
