@@ -1,5 +1,5 @@
 """
-Support for LinkPlay based devices.
+Support for Linkplay based devices.
 
 For more details about this platform, please refer to the documentation at
 https://github.com/nagyrobi/home-assistant-custom-components-linkplay
@@ -154,7 +154,7 @@ SOURCES_MAP = {'-1': 'Idle',
 
 SOURCES_LIVEIN = ['-1', '0', '40', '41', '43', '44', '45', '46', '47', '48', '49', '50', '99']
 SOURCES_STREAM = ['1', '2', '3', '10', '30']
-SOURCES_LOCALF = ['11', '16', '20', '21', '52', '31', '60']
+SOURCES_LOCALF = ['11', '16', '20', '21', '52', '60']
 
 class LinkPlayData:
     """Storage class for platform global data."""
@@ -163,22 +163,22 @@ class LinkPlayData:
         self.entities = []
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
-    """Set up the LinkPlay device."""
+    """Set up the Linkplay device."""
 
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = LinkPlayData()
-        
+
     linkplay = LinkPlayDevice(config.get(CONF_HOST),
                               config.get(CONF_NAME),
                               config.get(CONF_SOURCES),
                               config.get(CONF_ICECAST_METADATA),
                               config.get(CONF_MULTIROOM_WIFIDIRECT),
                               config.get(CONF_LASTFM_API_KEY))
-    
+
     add_entities([linkplay])
 
 class LinkPlayDevice(MediaPlayerEntity):
-    """Representation of a LinkPlay device."""
+    """Representation of a Linkplay device."""
     def __init__(self, 
                  host, 
                  name,
@@ -187,7 +187,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                  multiroom_wifidierct, 
                  lfm_api_key=None
                  ):
-        """Initialize the LinkPlay device."""
+        """Initialize the Linkplay device."""
         self._fw_ver = '1.0.0'
         self._uuid = ''
         self._features = None
@@ -238,6 +238,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._playing_liveinput = False
         self._playing_spotify = False
         self._playing_webplaylist = False
+        self._playing_tts = False
         self._slave_list = None
         self._multiroom_wifidirect = False
         self._multiroom_group = []
@@ -560,7 +561,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         """Mute (true) or unmute (false) media player."""
         if not (self._slave_mode and self._multiroom_wifidirect):
             if self._is_master:
-                self._lpapi.call('GET', 'setPlayerCmd:slave_mute:{0}'.format(str(mute)))
+                self._lpapi.call('GET', 'setPlayerCmd:slave_mute:{0}'.format(str(int(mute))))
             else:
                 self._lpapi.call('GET', 'setPlayerCmd:mute:{0}'.format(str(int(mute))))
             value = self._lpapi.data
@@ -602,6 +603,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 
             if value == "OK":
                 self._unav_throttle = False
+                self._playing_tts = False
                 self._state = STATE_PLAYING
                 self._position_updated_at = utcnow()
                 if self._slave_list is not None:
@@ -717,11 +719,14 @@ class LinkPlayDevice(MediaPlayerEntity):
 
     def play_media(self, media_type, media_id, **kwargs):
         """Play media from a URL or localfile."""
-        #_LOGGER.debug("Trying to play media. Device: %s, Media_type: %s, Media_id: %s", self.entity_id, media_type, media_id)
+        _LOGGER.debug("Trying to play media. Device: %s, Media_type: %s, Media_id: %s", self.entity_id, media_type, media_id)
         if not self._slave_mode:
             if not media_type in [MEDIA_TYPE_MUSIC, MEDIA_TYPE_URL]:
                 _LOGGER.warning("For %s Invalid media type %s. Only %s and %s is supported", self._name, media_type, MEDIA_TYPE_MUSIC, MEDIA_TYPE_URL)
                 return
+
+            if media_id.find('http') == 0:
+                media_type = MEDIA_TYPE_URL
 
             if media_type == MEDIA_TYPE_URL:
                 self._lpapi.call('GET', 'setPlayerCmd:play:{0}'.format(media_id))
@@ -737,6 +742,10 @@ class LinkPlayDevice(MediaPlayerEntity):
                     _LOGGER.warning("Failed to play media type music. Device: %s, Got response: %s, Media_Id: %s", self.entity_id, value, media_id)
                     return False
 
+            if media_id.find('tts_proxy') != -1:
+                self._playing_tts = True
+            else:
+                self._playing_tts = False
             self._state = STATE_PLAYING
             self._media_title = None
             self._media_artist = None
@@ -785,6 +794,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                         self._wait_for_mcu = 2  # switching from live to stream input -> time to report correct volume value at update
                     else:
                         self._wait_for_mcu = 0.5
+                    self._playing_tts = False
                     self._source = source
                     self._media_uri = temp_source
                     self._state = STATE_PLAYING
@@ -903,7 +913,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     slave.set_slave_mode(True)
                     slave.set_media_title(self._media_title)
                     slave.set_media_artist(self._media_artist)
-                    slave.set_muted(self._muted)
+#                    slave.set_muted(self._muted)
                     slave.set_state(self.state)
                     slave.set_slave_ip(self._host)
                     slave.set_media_image_url(self._media_image_url)
@@ -990,7 +1000,6 @@ class LinkPlayDevice(MediaPlayerEntity):
         if device.entity_id in self._multiroom_group:
             self._multiroom_group.remove(device.entity_id)
 #            self.schedule_update_ha_state(True)
-#            self._position_updated_at = utcnow()
 
         if len(self._multiroom_group) <= 1:
             self._multiroom_group = []
@@ -1002,7 +1011,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 if player.entity_id == member and player.entity_id != self.entity_id:
                     player.set_multiroom_group(self._multiroom_group)
 #                    player.trigger_schedule_update(True)
-                    player.set_position_updated_at(utcnow())
+#                    player.set_position_updated_at(utcnow())
 
     def execute_command(self, command, notif):
         """Execute desired command against the player using factory API."""
@@ -1360,7 +1369,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         try:
             result = self._upnp_device.PlayQueue.SetSpotifyPreset(KeyIndex=presetnum)
         except:
-            _LOGGER.debug("SetSpotifyPreset UPNP error: %s, %s", self.entity_id, presetnum)
+            _LOGGER.debug("SetSpotifyPreset UPNP error: %s, %s, result: %s", self.entity_id, presetnum, result)
             return
 
         result = str(result.get('Result'))
@@ -1513,6 +1522,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 return False
             else:
                 self._state = STATE_PLAYING
+                self._playing_tts = False
                 self._wait_for_mcu = 0.4
                 self._media_title = None
                 self._media_artist = None
@@ -1804,21 +1814,24 @@ class LinkPlayDevice(MediaPlayerEntity):
                         self._ssid = self._ssid.decode()
                         try:
                             self._name = device_status['DeviceName']
-
                         except KeyError:
                             pass
+
                         try:
                             self._fw_ver = device_status['firmware']
                         except KeyError:
                             fw_ver = '1.0.0'
+
                         try:
                             self._preset_key = int(device_status['preset_key'])
                         except KeyError:
                             preset_key = 4
+
                         try:
                             self._uuid = device_status['uuid']  # FF31F09E - Arylic
                         except KeyError:
                             self._uuid = ''
+
                         if not self._multiroom_wifidirect and self._fw_ver:
                             if self._fwvercheck(self._fw_ver) < self._fwvercheck(FW_MROOM_RTR_MIN):
                                 self._multiroom_wifidirect = True
@@ -1862,9 +1875,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 'pause': STATE_PAUSED,
             }.get(player_status['status'], STATE_IDLE)
 
-            self._playing_spotify = bool(player_status['mode'] == '31')
-
-            if self._state == STATE_PLAYING or self._state == STATE_PAUSED:
+            if self._state in [STATE_PLAYING, STATE_PAUSED]:
                 self._position_updated_at = utcnow()
                 self._duration = int(int(player_status['totlen']) / 1000)
                 self._playhead_position = int(int(player_status['curpos']) / 1000)
@@ -1872,9 +1883,13 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._duration = 0
                 self._playhead_position = 0
 
+            self._playing_spotify = bool(player_status['mode'] == '31')
             self._playing_liveinput = player_status['mode'] in SOURCES_LIVEIN
             self._playing_stream = player_status['mode'] in SOURCES_STREAM
             self._playing_localfile = player_status['mode'] in SOURCES_LOCALF
+
+            if bool(player_status['mode'] != '10'):
+                self._playing_tts = False
 
             if not (self._playing_liveinput or self._playing_stream or self._playing_localfile):
                 self._playing_localfile = True
@@ -1947,7 +1962,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._media_image_url = None
                     self._icecast_name = None
 
-                if self._playing_localfile and self._state in [STATE_PLAYING, STATE_PAUSED]:
+                if self._playing_localfile and self._state in [STATE_PLAYING, STATE_PAUSED] and not self._playing_tts:
                     self._get_playerstatus_metadata(player_status)
 
                     if self._media_title is not None and self._media_artist is None:
@@ -1965,10 +1980,10 @@ class LinkPlayDevice(MediaPlayerEntity):
                     else:
                         self._media_title = self._source
 
-                elif self._state == STATE_PLAYING and self._media_uri and int(player_status['totlen']) > 0 and not self._snapshot_active:
+                elif self._state == STATE_PLAYING and self._media_uri and int(player_status['totlen']) > 0 and not self._snapshot_active and not self._playing_tts:
                     self._get_playerstatus_metadata(player_status)
 
-                elif self._state == STATE_PLAYING and self._media_uri and int(player_status['totlen']) <= 0 and not self._snapshot_active:
+                elif self._state == STATE_PLAYING and self._media_uri and int(player_status['totlen']) <= 0 and not self._snapshot_active and not self._playing_tts:
                     if self._ice_skip_throt:
                         self._update_from_icecast(no_throttle=True)
                         self._ice_skip_throt = False
@@ -2018,7 +2033,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                             device.set_media_title(self._media_title)
                             device.set_media_artist(self._media_artist)
                             device.set_volume(slave['volume'])
-                            device.set_muted(slave['mute'])
+                            #device.set_muted(slave['mute'])
                             device.set_state(self.state)
                             device.set_slave_ip(slave['ip'])
                             device.set_media_image_url(self._media_image_url)
@@ -2040,7 +2055,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         return True
 
 class LinkPlayRestData:
-    """Class for handling the data retrieval from the LinkPlay device."""
+    """Class for handling the data retrieval from the Linkplay device."""
     def __init__(self, host):
         """Initialize the data object."""
         self.data = None
@@ -2066,7 +2081,7 @@ class LinkPlayRestData:
             self.data = None
 
 class LinkPlayTcpUartData:
-    """Class for handling the data retrieval from the LinkPlay device."""
+    """Class for handling the data retrieval from the Linkplay device."""
     def __init__(self, host):
         """Initialize the data object."""
         self.data = None
@@ -2101,7 +2116,7 @@ class LinkPlayTcpUartData:
             self.data = None
 
 class LastFMRestData:
-    """Class for handling the data retrieval from the LinkPlay device."""
+    """Class for handling the data retrieval from the Linkplay device."""
     def __init__(self, api_key):
         """Initialize the data object."""
         self.data = None
