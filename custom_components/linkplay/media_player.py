@@ -1891,7 +1891,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             if bool(player_status['mode'] != '10'):
                 self._playing_tts = False
 
-            if not (self._playing_liveinput or self._playing_stream or self._playing_localfile):
+            if not (self._playing_liveinput or self._playing_stream or self._playing_spotify):
                 self._playing_localfile = True
 
             try:
