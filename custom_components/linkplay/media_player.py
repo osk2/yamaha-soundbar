@@ -475,20 +475,25 @@ class LinkPlayDevice(MediaPlayerEntity):
             attributes[ATTR_TRCNT] = len(self._trackq) - 1
             attributes[ATTR_TRCRT] = self._trackc
 
-        if self._playing_localfile:
-            attributes[ATTR_DEBUG] = "_playing_localfile"
+        if self._upnp_device is None:
+            attributes[ATTR_DEBUG] = "UPnP not detected"
+        else:
+            attributes[ATTR_DEBUG] = "UPnP detected"
 
-        elif self._playing_spotify:
-            attributes[ATTR_DEBUG] = "_playing_spotify"
+#        if self._playing_localfile:
+#            attributes[ATTR_DEBUG] = "_playing_localfile"
 
-        elif self._playing_webplaylist:
-            attributes[ATTR_DEBUG] = "_playing_webplaylist"
+#        elif self._playing_spotify:
+#            attributes[ATTR_DEBUG] = "_playing_spotify"
 
-        elif self._playing_stream:
-            attributes[ATTR_DEBUG] = "_playing_stream"
+#        elif self._playing_webplaylist:
+#            attributes[ATTR_DEBUG] = "_playing_webplaylist"
 
-        elif self._playing_liveinput:
-            attributes[ATTR_DEBUG] = "_playing_liveinput"
+#        elif self._playing_stream:
+#            attributes[ATTR_DEBUG] = "_playing_stream"
+
+#        elif self._playing_liveinput:
+#            attributes[ATTR_DEBUG] = "_playing_liveinput"
 
         return attributes
 
@@ -1459,32 +1464,38 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         source_media_name = self._source_list.get("udisk", "USB Disk")
 
-        if len(self._trackq) <= 0:
-            raise BrowseError(
-                f"Media not found. Please insert/select " + source_media_name
+        if len(self._trackq) > 0:
+            radio = [
+                BrowseMedia(
+                    title = preset,
+                    media_class = MEDIA_CLASS_MUSIC,
+                    media_content_id = index,
+                    media_content_type = MEDIA_TYPE_MUSIC,
+                    can_play = True,
+                    can_expand = False,
+                )
+                for index, preset in enumerate(self._trackq, start=1)
+            ]
+
+            root = BrowseMedia(
+                title=self._name + " " + source_media_name,
+                media_class = MEDIA_CLASS_DIRECTORY,
+                media_content_id = "root",
+                media_content_type = "listing",
+                can_play = False,
+                can_expand = True,
+                children = radio,
             )
 
-        radio = [
-            BrowseMedia(
-                title=preset,
-                media_class=MEDIA_CLASS_MUSIC,
-                media_content_id=index,
-                media_content_type=MEDIA_TYPE_MUSIC,
-                can_play=True,
-                can_expand=False,
+        else:
+            root = BrowseMedia(
+                title=self._name + " " + source_media_name,
+                media_class = MEDIA_CLASS_DIRECTORY,
+                media_content_id = "root",
+                media_content_type = "listing",
+                can_play = False,
+                can_expand = False,
             )
-            for index, preset in enumerate(self._trackq, start=1)
-        ]
-
-        root = BrowseMedia(
-            title=self._name + " " + source_media_name,
-            media_class=MEDIA_CLASS_DIRECTORY,
-            media_content_id="root",
-            media_content_type="listing",
-            can_play=False,
-            can_expand=True,
-            children=radio,
-        )
 
         return root
 
