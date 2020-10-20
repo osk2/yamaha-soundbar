@@ -42,7 +42,6 @@ from homeassistant.components.media_player import (
     MediaPlayerEntity,
 )
 from homeassistant.components.media_player.const import (
-#    DOMAIN, 
     MEDIA_TYPE_MUSIC,
     MEDIA_TYPE_URL,
     MEDIA_CLASS_DIRECTORY,
@@ -898,19 +897,26 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         for slave in slaves:
             if slave._is_master:
+                _LOGGER.debug("Multiroom: slave has master flag set. Unjoining it from where it is. Master: %s, Slave: %s", self.entity_id, slave.entity_id)
                 slave.unjoin_all()
 
             if slave.entity_id not in self._multiroom_group:
                 if slave._slave_mode:
+                    _LOGGER.debug("Multiroom: slave already has slave flag set. Unjoining it from where it is. Master: %s, Slave: %s", self.entity_id, slave.entity_id)
                     slave.unjoin_me()
 
                 slave.set_previous_source(True)
                 if self._multiroom_wifidirect:
+                    _LOGGER.debug("Multiroom: Join in WiFi drect mode. Master: %s, Slave: %s", self.entity_id, slave.entity_id)
                     cmd = "ConnectMasterAp:ssid={0}:ch={1}:auth=OPEN:".format(self._ssid, self._wifi_channel) + "encry=NONE:pwd=:chext=0"
                 else:
+                    _LOGGER.debug("Multiroom: Join in multiroom mode. Master: %s, Slave: %s", self.entity_id, slave.entity_id)
                     cmd = 'ConnectMasterAp:JoinGroupMaster:eth{0}:wifi0.0.0.0'.format(self._host)
 
-                if slave.lpapi_call('GET', cmd):
+                slave._lpapi.call('GET', cmd)
+                value = slave._lpapi.data
+                _LOGGER.debug("Multiroom: command result: %s Master: %s, Slave: %s", value, self.entity_id, slave.entity_id)
+                if value == "OK":
 #                    slave.set_volume(self._volume)
 #                    slave.set_volume_level(self._volume)
                     slave.set_master(self)
@@ -930,7 +936,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._multiroom_group.append(slave.entity_id)
                 else:
                     slave.set_previous_source(False)
-                    _LOGGER.warning("Failed to join multiroom. Master: %s, Slave: %s", self.entity_id, slave.entity_id)
+                    _LOGGER.warning("Failed to join multiroom. command result: %s Master: %s, Slave: %s", value, self.entity_id, slave.entity_id)
 
         for slave in slaves:
             if slave.entity_id in self._multiroom_group:
