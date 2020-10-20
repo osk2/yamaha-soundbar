@@ -936,7 +936,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._multiroom_group.append(slave.entity_id)
                 else:
                     slave.set_previous_source(False)
-                    _LOGGER.warning("Failed to join multiroom. Master: %s, Slave: %s", self.entity_id, slave.entity_id)
+                    _LOGGER.warning("Failed to join multiroom. command result: %s Master: %s, Slave: %s", value, self.entity_id, slave.entity_id)
 
         for slave in slaves:
             if slave.entity_id in self._multiroom_group:
