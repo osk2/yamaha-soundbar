@@ -1,11 +1,11 @@
-# Linkplay Sound Devices integration v2
+# Linkplay-based speakers and sound devices
 
 This component allows you to integrate control of audio devices based on Linkplay chipset into your [Home-Assistant](http://www.home-assistant.io) smart home system. Originally developed by nicjo814, maintained by limych. This version mostly rewritten by nagyrobi. Read more about Linkplay at the bottom of this file.
 
 Fully compatible with Mini Media Player card for Lovelace UI by kalkih, including speaker group management.
 
 ### Warning !!!
-This **will overwrite** the previous **Linkplay Sound Devices Integration** component if you had it installed. Also the configuration settings are not backwards compatible so **you will have to adjust** them as documented below otherwise it may break your system. To avoid this, make a backup of your previous linkplay config and remove it from your Home Assistant instance. Also uninstall/delete the previous linkplay component and restart Home Assistant.
+This **will overwrite** the old **Linkplay Sound Devices Integration** component if you had it installed. Also the configuration settings are not backwards compatible so **you will have to adjust** them as documented below otherwise it may break your system. To avoid this, make a backup of your previous linkplay config and remove it from your Home Assistant instance. Also uninstall/delete the previous linkplay component and restart Home Assistant.
 
 [Configuration details and documentation](https://github.com/nagyrobi/home-assistant-custom-components-linkplay#installation)
 
