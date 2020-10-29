@@ -3,5 +3,5 @@
   "content_in_root": false,
   "render_readme": false,
   "domains": ["media_player"],
-  "homeassistant": "0.115.0"
+  "homeassistant": "0.117.0"
 }
