@@ -44,6 +44,7 @@ from homeassistant.components.media_player import (
 from homeassistant.components.media_player.const import (
     MEDIA_TYPE_MUSIC,
     MEDIA_TYPE_URL,
+    MEDIA_TYPE_TRACK,
     MEDIA_CLASS_DIRECTORY,
     MEDIA_CLASS_MUSIC,
     SUPPORT_NEXT_TRACK,
@@ -56,9 +57,13 @@ from homeassistant.components.media_player.const import (
     SUPPORT_SELECT_SOUND_MODE,
     SUPPORT_SELECT_SOURCE,
     SUPPORT_SHUFFLE_SET,
+    SUPPORT_REPEAT_SET,
     SUPPORT_VOLUME_MUTE,
     SUPPORT_VOLUME_SET,
     SUPPORT_STOP,
+    REPEAT_MODE_ALL,
+    REPEAT_MODE_OFF,
+    REPEAT_MODE_ONE,
 )
 from homeassistant.components.media_player.errors import BrowseError
 from . import DOMAIN, ATTR_MASTER
@@ -209,6 +214,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._duration = 0
         self._position_updated_at = None
         self._shuffle = False
+        self._repeat = REPEAT_MODE_OFF
         self._media_album = None
         self._media_artist = None
         self._media_prev_artist = None
@@ -347,13 +353,13 @@ class LinkPlayDevice(MediaPlayerEntity):
                 SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | \
                 SUPPORT_VOLUME_SET | SUPPORT_VOLUME_MUTE | \
                 SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE | \
-                SUPPORT_NEXT_TRACK | SUPPORT_PREVIOUS_TRACK | SUPPORT_SHUFFLE_SET | SUPPORT_SEEK
+                SUPPORT_NEXT_TRACK | SUPPORT_PREVIOUS_TRACK | SUPPORT_SHUFFLE_SET | SUPPORT_REPEAT_SET | SUPPORT_SEEK
             else:
                 self._features = \
                 SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | \
                 SUPPORT_VOLUME_SET | SUPPORT_VOLUME_MUTE | \
                 SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE | \
-                SUPPORT_NEXT_TRACK | SUPPORT_PREVIOUS_TRACK | SUPPORT_SHUFFLE_SET
+                SUPPORT_NEXT_TRACK | SUPPORT_PREVIOUS_TRACK | SUPPORT_SHUFFLE_SET | SUPPORT_REPEAT_SET
 
         elif self._playing_stream:
             self._features = \
@@ -400,6 +406,11 @@ class LinkPlayDevice(MediaPlayerEntity):
     def shuffle(self):
         """Return True if shuffle mode is enabled."""
         return self._shuffle
+
+    @property
+    def repeat(self):
+        """Return repeat mode."""
+        return self._repeat
 
     @property
     def media_title(self):
@@ -460,6 +471,11 @@ class LinkPlayDevice(MediaPlayerEntity):
         return self._is_master
 
     @property
+    def device_class(self):
+        """Return the device class of this entity, if any."""
+        return DEVICE_CLASS_SPEAKER
+
+    @property
     def device_state_attributes(self):
         """List members in group and set master and slave state."""
         attributes = {}
@@ -469,7 +485,6 @@ class LinkPlayDevice(MediaPlayerEntity):
         attributes[ATTR_MASTER] = self._is_master
         attributes[ATTR_SLAVE] = self._slave_mode
         attributes[ATTR_FWVER] = self._fw_ver
-        attributes[ATTR_DEVICE_CLASS] = DEVICE_CLASS_SPEAKER
         if len(self._trackq) > 0:
             attributes[ATTR_TRCNT] = len(self._trackq) - 1
             attributes[ATTR_TRCRT] = self._trackc
@@ -647,7 +662,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         if not self._slave_mode:
             if self._playing_spotify or self._playing_liveinput:
                 self._lpapi.call('GET', 'setPlayerCmd:switchmode:wifi')
-                time.sleep(0.3)
+                self._wait_for_mcu = 1.2
 
             self._lpapi.call('GET', 'setPlayerCmd:stop')
             value = self._lpapi.data
@@ -725,7 +740,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         """Play media from a URL or localfile."""
         _LOGGER.debug("Trying to play media. Device: %s, Media_type: %s, Media_id: %s", self.entity_id, media_type, media_id)
         if not self._slave_mode:
-            if not media_type in [MEDIA_TYPE_MUSIC, MEDIA_TYPE_URL]:
+            if not media_type in [MEDIA_TYPE_MUSIC, MEDIA_TYPE_URL, MEDIA_TYPE_TRACK]:
                 _LOGGER.warning("For %s Invalid media type %s. Only %s and %s is supported", self._name, media_type, MEDIA_TYPE_MUSIC, MEDIA_TYPE_URL)
                 return
 
@@ -739,7 +754,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     _LOGGER.warning("Failed to play media type URL. Device: %s, Got response: %s, Media_Id: %s", self.entity_id, value, media_id)
                     return False
 
-            if media_type == MEDIA_TYPE_MUSIC:
+            if media_type in [MEDIA_TYPE_MUSIC, MEDIA_TYPE_TRACK]:
                 self._lpapi.call('GET', 'setPlayerCmd:playLocalList:{0}'.format(media_id))
                 value = self._lpapi.data
                 if value != "OK":
@@ -861,13 +876,36 @@ class LinkPlayDevice(MediaPlayerEntity):
     def set_shuffle(self, shuffle):
         """Change the shuffle mode."""
         if not self._slave_mode:
-            mode = '2' if shuffle else '0'
+            self._shuffle = shuffle
+            if self._repeat == REPEAT_MODE_OFF:
+                mode = '0'
+            elif self._repeat == REPEAT_MODE_ALL:
+                mode = '2' if shuffle else '3'
+            elif self._repeat == REPEAT_MODE_ONE:
+                mode = '1'
             self._lpapi.call('GET', 'setPlayerCmd:loopmode:{0}'.format(mode))
             value = self._lpapi.data
             if value != "OK":
                 _LOGGER.warning("Failed to change shuffle mode. Device: %s, Got response: %s", self.entity_id, value)
         else:
             self._master.set_shuffle(shuffle)
+
+    def set_repeat(self, repeat):
+        """Change the repeat mode."""
+        if not self._slave_mode:
+            self._repeat = repeat
+            if repeat == REPEAT_MODE_OFF:
+                mode = '0'
+            elif repeat == REPEAT_MODE_ALL:
+                mode = '2' if self._shuffle else '3'
+            elif repeat == REPEAT_MODE_ONE:
+                mode = '1'
+            self._lpapi.call('GET', 'setPlayerCmd:loopmode:{0}'.format(mode))
+            value = self._lpapi.data
+            if value != "OK":
+                _LOGGER.warning("Failed to change repeat mode. Device: %s, Got response: %s", self.entity_id, value)
+        else:
+            self._master.set_repeat(repeat)
 
     def preset_button(self, preset):
         """Simulate pressing a physical preset button."""
@@ -1882,8 +1920,13 @@ class LinkPlayDevice(MediaPlayerEntity):
 
             self._shuffle = {
                 '2': True,
-                '3': True,
             }.get(player_status['loop'], False)
+
+            self._repeat = {
+                '2': REPEAT_MODE_ALL,
+                '3': REPEAT_MODE_ALL,
+                '1': REPEAT_MODE_ONE,
+            }.get(player_status['loop'], REPEAT_MODE_OFF)
 
             self._state = {
                 'stop': STATE_IDLE,
