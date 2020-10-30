@@ -876,13 +876,16 @@ class LinkPlayDevice(MediaPlayerEntity):
     def set_shuffle(self, shuffle):
         """Change the shuffle mode."""
         if not self._slave_mode:
-            self._shuffle = shuffle
-            if self._repeat == REPEAT_MODE_OFF:
-                mode = '0'
-            elif self._repeat == REPEAT_MODE_ALL:
-                mode = '2' if shuffle else '3'
-            elif self._repeat == REPEAT_MODE_ONE:
-                mode = '1'
+            if shuffle:
+                self._shuffle = shuffle
+                mode = '2'
+            else:
+                if self._repeat == REPEAT_MODE_OFF:
+                    mode = '0'
+                elif self._repeat == REPEAT_MODE_ALL:
+                    mode = '3'
+                elif self._repeat == REPEAT_MODE_ONE:
+                    mode = '1'
             self._lpapi.call('GET', 'setPlayerCmd:loopmode:{0}'.format(mode))
             value = self._lpapi.data
             if value != "OK":
