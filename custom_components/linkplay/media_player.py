@@ -188,7 +188,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                  name,
                  sources, 
                  icecast_meta, 
-                 multiroom_wifidierct, 
+                 multiroom_wifidirect, 
                  lfm_api_key=None
                  ):
         """Initialize the Linkplay device."""
@@ -245,7 +245,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._playing_webplaylist = False
         self._playing_tts = False
         self._slave_list = None
-        self._multiroom_wifidirect = False
+        self._multiroom_wifidirect = multiroom_wifidirect
         self._multiroom_group = []
         self._multiroom_prevsrc = None
         self._multiroom_unjoinat = None
