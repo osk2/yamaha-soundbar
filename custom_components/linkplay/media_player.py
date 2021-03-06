@@ -381,7 +381,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def media_position(self):
         """Time in seconds of current playback head position."""
-        if self._playing_localfile or self._playing_spotify or self._slave_mode:
+        if (self._playhead_position > 0) and (self._duration > 0):
             return self._playhead_position
         else:
             return None
@@ -389,7 +389,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def media_duration(self):
         """Time in seconds of current song duration."""
-        if self._playing_localfile or self._playing_spotify or self._slave_mode:
+        if (self._playhead_position > 0) and (self._duration > 0):
             return self._duration
         else:
             return None
