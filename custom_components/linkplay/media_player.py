@@ -89,6 +89,7 @@ ICON_PUSHSTREAM = 'mdi:cast-audio'
 CONF_NAME = 'name'
 CONF_LASTFM_API_KEY = 'lastfm_api_key'
 CONF_SOURCES = 'sources'
+CONF_COMMONSOURCES = 'common_sources'
 CONF_ICECAST_METADATA = 'icecast_metadata'
 CONF_MULTIROOM_WIFIDIRECT = 'multiroom_wifidirect'
 
@@ -112,6 +113,7 @@ PLATFORM_SCHEMA = vol.All(cv.PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_ICECAST_METADATA, default=DEFAULT_ICECAST_UPDATE): vol.In(['Off', 'StationName', 'StationNameSongTitle']),
     vol.Optional(CONF_MULTIROOM_WIFIDIRECT, default=DEFAULT_MULTIROOM_WIFIDIRECT): cv.boolean,
     vol.Optional(CONF_SOURCES): cv.ensure_list,
+    vol.Optional(CONF_COMMONSOURCES): cv.ensure_list,
     vol.Optional(CONF_LASTFM_API_KEY): cv.string,
 }))
 
@@ -175,6 +177,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
     linkplay = LinkPlayDevice(config.get(CONF_HOST),
                               config.get(CONF_NAME),
                               config.get(CONF_SOURCES),
+                              config.get(CONF_COMMONSOURCES),
                               config.get(CONF_ICECAST_METADATA),
                               config.get(CONF_MULTIROOM_WIFIDIRECT),
                               config.get(CONF_LASTFM_API_KEY))
@@ -187,6 +190,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                  host, 
                  name,
                  sources, 
+                 common_sources, 
                  icecast_meta, 
                  multiroom_wifidirect, 
                  lfm_api_key=None
@@ -208,6 +212,10 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._source_list = loads(dumps(sources).strip('[]'))
         else:
             self._source_list = SOURCES.copy()
+        if common_sources is not None and common_sources != {}:
+            commonsources = loads(dumps(common_sources).strip('[]'))
+            allsources = self._source_list
+            self._source_list = {**allsources, **commonsources}
         self._sound_mode = None
         self._muted = False
         self._playhead_position = 0
