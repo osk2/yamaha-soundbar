@@ -69,7 +69,7 @@ media_player:
 The sources can be renamed to your preference (change only the part after **:** ). You can also specify http-based (Icecast / Shoutcast) internet radio streams as input sources:
 ```yaml
 'http://1.2.3.4:8000/your_radio': 'Your Radio',
-'http://icecast.streamserver.tld/mountpoint.aac': 'Another radio',
+'http://icecast.streamserver.tld/mountpoint.aac': 'Another radio'
 ```
 If you don't want a source selector to be available at all, set option to `sources: {}`.
 
