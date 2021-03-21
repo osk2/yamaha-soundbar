@@ -39,6 +39,7 @@ media_player:
       name: Sound Room2
       icecast_metadata: 'Off'  # valid values: 'Off', 'StationName', 'StationNameSongTitle'
       sources: {}
+      common_sources: !include linkplay-radio-sources.yaml
 ```
 
 ### Configuration Variables
@@ -71,6 +72,15 @@ The sources can be renamed to your preference (change only the part after **:** 
 'http://icecast.streamserver.tld/mountpoint.aac': 'Another radio',
 ```
 If you don't want a source selector to be available at all, set option to `sources: {}`.
+
+**common_sources:**\
+  *(list)* *(Optional)* Another list with sources which should appear on the device. Useful if you have multiple devices on the network and you'd like to maintain a common list of http-based internet radio stream sources for all of them in a single file with `!include linkplay-radio-sources.yaml`. The included file should be in the same place as the main config file containing `linkplay` platform, for example:
+```yaml
+{
+  'http://1.2.3.4:8000/your_radio': 'Your Radio',
+  'http://icecast.streamserver.tld/mountpoint.aac': 'Another radio'
+}
+```
 
 **icecast_metadata:**\
   *(string)* *(Optional)* When playing icecast webradio streams, how to handle metadata. Valid values here are `'Off'`, `'StationName'`, `'StationNameSongTitle'`, defaulting to `'StationName'` when not set. With `'Off'`, Home Assistant will not try do request any metadata from the IceCast server. With `'StationName'`, Home Assistant will request from the headers only once when starting the playback the stream name, and display it in the `media_title` property of the player. With `'StationNameSongTitle'` Home Assistant will request the stream server periodically for icy-metadata, and read out `StreamTitle`, trying to figure out correct values for `media_title` and `media_artist`, in order to gather cover art information from LastFM service (see below). Note that metadata retrieval success depends on how the icecast radio station servers and encoders are configured, if they don't provide proper infos or they don't display correctly, it's better to turn it off or just use StationName to save server load. There's no standard way enforced on the servers.
