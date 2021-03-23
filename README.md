@@ -75,7 +75,7 @@ If you don't want a source selector to be available at all, set option to `sourc
 
 **common_sources:**\
   *(list)* *(Optional)* Another list with sources which should appear on the device. Useful if you have multiple devices on the network and you'd like to maintain a common list of http-based internet radio stream sources for all of them in a single file with `!include linkplay-radio-sources.yaml`. The included file should be in the same place as the main config file containing `linkplay` platform, for example:
-```yaml
+```json
 {
   'http://1.2.3.4:8000/your_radio': 'Your Radio',
   'http://icecast.streamserver.tld/mountpoint.aac': 'Another radio'
