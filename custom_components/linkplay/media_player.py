@@ -214,8 +214,8 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._source_list = SOURCES.copy()
         if common_sources is not None and common_sources != {}:
             commonsources = loads(dumps(common_sources).strip('[]'))
-            allsources = self._source_list
-            self._source_list = {**allsources, **commonsources}
+            localsources = self._source_list
+            self._source_list = {**localsources, **commonsources}
         self._sound_mode = None
         self._muted = False
         self._playhead_position = 0
@@ -531,6 +531,11 @@ class LinkPlayDevice(MediaPlayerEntity):
             return len(self._trackq) - 1
         else:
             return 0
+
+    @property
+    def unique_id(self):
+        """Return the unique id."""
+        return "linkplay_media_" + self._host  # + self._uuid not available yet at start
 
     @property
     def fw_ver(self):
@@ -1896,7 +1901,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                         try:
                             self._uuid = device_status['uuid']  # FF31F09E - Arylic
                         except KeyError:
-                            self._uuid = ''
+                            self._uuid = self._host
 
                         if not self._multiroom_wifidirect and self._fw_ver:
                             if self._fwvercheck(self._fw_ver) < self._fwvercheck(FW_MROOM_RTR_MIN):
