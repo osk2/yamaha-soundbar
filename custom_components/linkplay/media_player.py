@@ -60,6 +60,7 @@ from homeassistant.components.media_player.const import (
     SUPPORT_REPEAT_SET,
     SUPPORT_VOLUME_MUTE,
     SUPPORT_VOLUME_SET,
+    SUPPORT_VOLUME_STEP,
     SUPPORT_STOP,
     REPEAT_MODE_ALL,
     REPEAT_MODE_OFF,
@@ -92,6 +93,7 @@ CONF_SOURCES = 'sources'
 CONF_COMMONSOURCES = 'common_sources'
 CONF_ICECAST_METADATA = 'icecast_metadata'
 CONF_MULTIROOM_WIFIDIRECT = 'multiroom_wifidirect'
+CONF_VOLUME_STEP = 'volume_step'
 
 LASTFM_API_BASE = 'http://ws.audioscrobbler.com/2.0/?method='
 MAX_VOL = 100
@@ -106,6 +108,7 @@ ROOTDIR_USB = '/media/sda1/'
 
 DEFAULT_ICECAST_UPDATE = 'StationName'
 DEFAULT_MULTIROOM_WIFIDIRECT = False
+DEFAULT_VOLUME_STEP = 5
 
 PLATFORM_SCHEMA = vol.All(cv.PLATFORM_SCHEMA.extend({
     vol.Required(CONF_HOST): cv.string,
@@ -115,6 +118,7 @@ PLATFORM_SCHEMA = vol.All(cv.PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_SOURCES): cv.ensure_list,
     vol.Optional(CONF_COMMONSOURCES): cv.ensure_list,
     vol.Optional(CONF_LASTFM_API_KEY): cv.string,
+    vol.Optional(CONF_VOLUME_STEP, default=DEFAULT_VOLUME_STEP): vol.All(int, vol.Range(min=1, max=25)),
 }))
 
 SOUND_MODES = {'0': 'Normal', '1': 'Classic', '2': 'Pop', '3': 'Jazz', '4': 'Vocal'}
@@ -180,6 +184,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
                               config.get(CONF_COMMONSOURCES),
                               config.get(CONF_ICECAST_METADATA),
                               config.get(CONF_MULTIROOM_WIFIDIRECT),
+                              config.get(CONF_VOLUME_STEP),
                               config.get(CONF_LASTFM_API_KEY))
 
     add_entities([linkplay])
@@ -193,6 +198,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                  common_sources, 
                  icecast_meta, 
                  multiroom_wifidirect, 
+                 volume_step,
                  lfm_api_key=None
                  ):
         """Initialize the Linkplay device."""
@@ -205,6 +211,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._icon = ICON_DEFAULT
         self._state = STATE_UNAVAILABLE
         self._volume = 0
+        self._volume_step = volume_step
         self._fadevol = False
         self._source = None
         self._prev_source = None
@@ -359,26 +366,26 @@ class LinkPlayDevice(MediaPlayerEntity):
             if self._state in [STATE_PLAYING, STATE_PAUSED]:
                 self._features = \
                 SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | \
-                SUPPORT_VOLUME_SET | SUPPORT_VOLUME_MUTE | \
+                SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
                 SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE | \
                 SUPPORT_NEXT_TRACK | SUPPORT_PREVIOUS_TRACK | SUPPORT_SHUFFLE_SET | SUPPORT_REPEAT_SET | SUPPORT_SEEK
             else:
                 self._features = \
                 SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | \
-                SUPPORT_VOLUME_SET | SUPPORT_VOLUME_MUTE | \
+                SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
                 SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE | \
                 SUPPORT_NEXT_TRACK | SUPPORT_PREVIOUS_TRACK | SUPPORT_SHUFFLE_SET | SUPPORT_REPEAT_SET
 
         elif self._playing_stream:
             self._features = \
             SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | \
-            SUPPORT_VOLUME_SET | SUPPORT_VOLUME_MUTE | \
+            SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
             SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE
 
         elif self._playing_liveinput:
             self._features = \
             SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | \
-            SUPPORT_VOLUME_SET | SUPPORT_VOLUME_MUTE | \
+            SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
             SUPPORT_STOP
 
         if "udisk" in self._source_list:
@@ -588,6 +595,68 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._volume = volume
             else:
                 _LOGGER.warning("Failed to set volume. Device: %s, Got response: %s", self.entity_id, value)
+
+    def volume_up(self):
+        """Increase volume one step"""
+        if int(self._volume) == 100 and not self._muted:
+            return
+
+        volume = int(self._volume) + int(self._volume_step)
+        if volume > 100:
+            volume = 100
+
+        if not (self._slave_mode and self._multiroom_wifidirect):
+
+            if self._is_master:
+                self._lpapi.call('GET', 'setPlayerCmd:slave_vol:{0}'.format(str(volume)))
+            else:
+                self._lpapi.call('GET', 'setPlayerCmd:vol:{0}'.format(str(volume)))
+            value = self._lpapi.data
+
+            if value == "OK":
+                self._volume = volume
+            else:
+                _LOGGER.warning("Failed to set volume_up. Device: %s, Got response: %s", self.entity_id, value)
+        else:
+            if self._snapshot_active:
+                return
+            self._master.lpapi.call('GET', 'multiroom:SlaveVolume:{0}:{1}'.format(self._slave_ip, str(volume)))
+            value = self._master.lpapi.data
+            if value == "OK":
+                self._volume = volume
+            else:
+                _LOGGER.warning("Failed to set volume_up. Device: %s, Got response: %s", self.entity_id, value)
+
+    def volume_down(self):
+        """Decrease volume one step."""
+        if int(self._volume) == 0:
+            return
+
+        volume = int(self._volume) - int(self._volume_step)
+        if volume < 0:
+            volume = 0
+
+        if not (self._slave_mode and self._multiroom_wifidirect):
+
+            if self._is_master:
+                self._lpapi.call('GET', 'setPlayerCmd:slave_vol:{0}'.format(str(volume)))
+            else:
+                self._lpapi.call('GET', 'setPlayerCmd:vol:{0}'.format(str(volume)))
+            value = self._lpapi.data
+
+            if value == "OK":
+                self._volume = volume
+            else:
+                _LOGGER.warning("Failed to set volume_down. Device: %s, Got response: %s", self.entity_id, value)
+        else:
+            if self._snapshot_active:
+                return
+            self._master.lpapi.call('GET', 'multiroom:SlaveVolume:{0}:{1}'.format(self._slave_ip, str(volume)))
+            value = self._master.lpapi.data
+            if value == "OK":
+                self._volume = volume
+            else:
+                _LOGGER.warning("Failed to set volume_down. Device: %s, Got response: %s", self.entity_id, value)
 
     def mute_volume(self, mute):
         """Mute (true) or unmute (false) media player."""
