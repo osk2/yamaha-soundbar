@@ -52,7 +52,7 @@ media_player:
   *(string)* *(Required)* Name that Home Assistant will generate the `entity_id` based on. It is also the base of the friendly name seen in Lovelace UI, but will be overriden by the device name set in the Android app.
 
 **volume_step:**  
-  *(integer)* *(Optional)* Step size in percent to change volume when calling `volume_up` or `volume_down` service against the media player. Can be a number between 1 and 25. 
+  *(integer)* *(Optional)* Step size in percent to change volume when calling `volume_up` or `volume_down` service against the media player. Defaults to `5`, can be a number between `1` and `25`. 
 
 **sources:**  
   *(list)* *(Optional)* A list with available source inputs on the device. If not specified, the integration will assume that all the supported source input types are present on it:
@@ -99,9 +99,9 @@ If you don't want a source selector to be available at all, set option to `sourc
 
 Linkplay devices support multiroom in two modes:
 - WiFi direct mode, where the master turns into a hidden AP and the slaves connect diretcly to it. The advantage is that this is a dedicated direct connection between the speakers, with network parameters optimized by the factory for streaming. Disadvantage is that switching of the stream is slower, plus the coverage can be limited due to the building's specifics. This is the default method used by the Android app to create multirooms.
-- Router mode, where the master and slaves connect to each other through the local network (from firmware v4.2.8020 up). The advantage is that all speakers remain connected to the existing network, swicthing the stream happens faster, and the coverage can be bigger being ensured by the network infrastructure of the building (works through multiple interconnected APs and switches). Disadvantage is that the network is not dedicated and it's the user responsibility to provide proper network infrastructure for reliable streaming. 
+- Router mode, where the master and slaves connect to each other through the local network (from firmware `v4.2.8020` up). The advantage is that all speakers remain connected to the existing network, swicthing the stream happens faster, and the coverage can be bigger being ensured by the network infrastructure of the building (works through multiple interconnected APs and switches). Disadvantage is that the network is not dedicated and it's the user responsibility to provide proper network infrastructure for reliable streaming. 
 
-This integration will autodetect the firmware version running on the player and choose multiroom mode accordingly. Units with firmware version lower than v4.2.8020 can connect to multirooms only in wifi-direct mode. Firmware version number can be seen in device attributes. If the user has a mix of players running old and new firmware, autodetection can be overriden with option `multiroom_wifidirect: True`, and is needed only for units with newer versions, to force them down to wifi-direct multiroom.
+This integration will autodetect the firmware version running on the player and choose multiroom mode accordingly. Units with firmware version lower than `v4.2.8020` can connect to multirooms _only in wifi-direct mode_. Firmware version number can be seen in device attributes. If the user has a mix of players running old and new firmware, autodetection can be overriden with option `multiroom_wifidirect: True`, and is needed only for units with newer versions, to force them down to wifi-direct multiroom.
 
 To create a multiroom group, connect `media_player.sound_room2` (slave) to `media_player.sound_room1` (master):
 ```yaml
