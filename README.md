@@ -23,6 +23,7 @@ media_player:
     - platform: linkplay
       host: 192.168.1.11
       name: Sound Room1
+      volume_step: 10
       icecast_metadata: 'StationNameSongTitle'
       multiroom_wifidirect: False
       sources: 
@@ -44,13 +45,16 @@ media_player:
 
 ### Configuration Variables
 
-**host:**\
+**host:**  
   *(string)* *(Required)* The IP address of the Linkplay unit.
 
-**name:**\
+**name:**  
   *(string)* *(Required)* Name that Home Assistant will generate the `entity_id` based on. It is also the base of the friendly name seen in Lovelace UI, but will be overriden by the device name set in the Android app.
 
-**sources:**\
+**volume_step:**  
+  *(integer)* *(Optional)* Step size in percent to change volume when calling `volume_up` or `volume_down` service against the media player. Can be a number between 1 and 25. 
+
+**sources:**  
   *(list)* *(Optional)* A list with available source inputs on the device. If not specified, the integration will assume that all the supported source input types are present on it:
 ```yaml
 'bluetooth': 'Bluetooth', 
@@ -73,22 +77,22 @@ The sources can be renamed to your preference (change only the part after **:** 
 ```
 If you don't want a source selector to be available at all, set option to `sources: {}`.
 
-**common_sources:**\
+**common_sources:**  
   *(list)* *(Optional)* Another list with sources which should appear on the device. Useful if you have multiple devices on the network and you'd like to maintain a common list of http-based internet radio stream sources for all of them in a single file with `!include linkplay-radio-sources.yaml`. The included file should be in the same place as the main config file containing `linkplay` platform, for example:
-```
+```yaml
 {
   'http://1.2.3.4:8000/your_radio': 'Your Radio',
   'http://icecast.streamserver.tld/mountpoint.aac': 'Another radio'
 }
 ```
 
-**icecast_metadata:**\
+**icecast_metadata:**  
   *(string)* *(Optional)* When playing icecast webradio streams, how to handle metadata. Valid values here are `'Off'`, `'StationName'`, `'StationNameSongTitle'`, defaulting to `'StationName'` when not set. With `'Off'`, Home Assistant will not try do request any metadata from the IceCast server. With `'StationName'`, Home Assistant will request from the headers only once when starting the playback the stream name, and display it in the `media_title` property of the player. With `'StationNameSongTitle'` Home Assistant will request the stream server periodically for icy-metadata, and read out `StreamTitle`, trying to figure out correct values for `media_title` and `media_artist`, in order to gather cover art information from LastFM service (see below). Note that metadata retrieval success depends on how the icecast radio station servers and encoders are configured, if they don't provide proper infos or they don't display correctly, it's better to turn it off or just use StationName to save server load. There's no standard way enforced on the servers.
 
-**lastfm_api_key:**\
+**lastfm_api_key:**  
   *(string)* *(Optional)* API key to LastFM service to get album covers. Register for one.
 
-**multiroom_wifidirect:**\
+**multiroom_wifidirect:**  
   *(boolean)* *(Optional)* Set to `True` to override the default router mode used by the component with wifi-direct connection mode (more details below).
 
 ## Multiroom
