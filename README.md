@@ -302,7 +302,7 @@ Linkplay is a smart audio chipset and module manufacturer. Their various module 
 There are quite a few manufacturers and devices that operate on the basis of Linkplay platform. Here are just some examples of the brands and models:
 - **Arylic** (S50Pro, A50, Up2Stream),
 - **August** (WS300G),
-- **Audio Pro** (A10, A40, Addon C3/C5/C5A/C10/C-SUB, D-1, Drumfire, Link 1),
+- **Audio Pro** (A10, A26, A36, A40, Addon C3/C5/C5A/C10/C-SUB, D-1, Drumfire, Link 1),
 - **Auna** (Intelligence Tube),
 - **Bauhn** (SoundMax 5),
 - **Bem** (Speaker Big Mo),
