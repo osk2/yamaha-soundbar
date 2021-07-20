@@ -77,6 +77,7 @@ ATTR_FWVER = 'firmware'
 ATTR_TRCNT = 'track_count'
 ATTR_TRCRT = 'track_current'
 ATTR_DEBUG = 'debug_info'
+ATTR_STURI = 'stream_uri'
 
 PARALLEL_UPDATES = 0
 
@@ -235,10 +236,11 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._media_prev_artist = None
         self._media_title = None
         self._media_prev_title = None
-        self._lpapi = LinkPlayRestData(self._host)
-        self._tcpapi = LinkPlayTcpUartData(self._host)
         self._media_image_url = None
         self._media_uri = None
+        self._media_uri_final = None
+        self._lpapi = LinkPlayRestData(self._host)
+        self._tcpapi = LinkPlayTcpUartData(self._host)
         self._first_update = True
         if lfm_api_key is not None:
             self._lfmapi = LastFMRestData(lfm_api_key)
@@ -500,6 +502,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         attributes[ATTR_MASTER] = self._is_master
         attributes[ATTR_SLAVE] = self._slave_mode
         attributes[ATTR_FWVER] = self._fw_ver
+        attributes[ATTR_STURI] = self._media_uri_final
         if len(self._trackq) > 0:
             attributes[ATTR_TRCNT] = len(self._trackq) - 1
             attributes[ATTR_TRCRT] = self._trackc
@@ -759,6 +762,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._media_album = None
                 self._icecast_name = None
                 self._media_uri = None
+                self._media_uri_final = None
                 self._trackc = None
                 self._media_image_url = None
                 self._position_updated_at = utcnow()
@@ -830,7 +834,8 @@ class LinkPlayDevice(MediaPlayerEntity):
                 media_type = MEDIA_TYPE_URL
 
             if media_type == MEDIA_TYPE_URL:
-                self._lpapi.call('GET', 'setPlayerCmd:play:{0}'.format(media_id))
+                media_id_final = self._detect_stream_url_redirection(media_id)
+                self._lpapi.call('GET', 'setPlayerCmd:play:{0}'.format(media_id_final))
                 value = self._lpapi.data
                 if value != "OK":
                     _LOGGER.warning("Failed to play media type URL. Device: %s, Got response: %s, Media_Id: %s", self.entity_id, value, media_id)
@@ -861,8 +866,10 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._unav_throttle = False
             if media_type == MEDIA_TYPE_URL:
                 self._media_uri = media_id
+                self._media_uri_final = media_id_final
             elif media_type == MEDIA_TYPE_MUSIC:
                 self._media_uri = None
+                self._media_uri_final = None
                 self._wait_for_mcu = 0.4
             return True
 
@@ -888,7 +895,8 @@ class LinkPlayDevice(MediaPlayerEntity):
 
             self._unav_throttle = False
             if temp_source.find('http') == 0:
-                self._lpapi.call('GET', 'setPlayerCmd:play:{0}'.format(temp_source))
+                temp_source_final = self._detect_stream_url_redirection(temp_source)
+                self._lpapi.call('GET', 'setPlayerCmd:play:{0}'.format(temp_source_final))
                 value = self._lpapi.data
                 if value == "OK":
                     if prev_source and prev_source.find('http') == -1:
@@ -898,6 +906,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._playing_tts = False
                     self._source = source
                     self._media_uri = temp_source
+                    self._media_uri_final = temp_source_final
                     self._state = STATE_PLAYING
                     self._playhead_position = 0
                     self._duration = 0
@@ -924,6 +933,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                         self._wait_for_mcu = 0.6  # switching to a physical input -> time to report correct volume value at update
                     self._source = source
                     self._media_uri = None
+                    self._media_uri_final = None
                     self._state = STATE_PLAYING
                     self._playhead_position = 0
                     self._duration = 0
@@ -1436,6 +1446,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._media_album = None
             self._media_image_url = None
             self._media_uri = None
+            self._media_uri_final = None
             self._icecast_name = None
             self._source = None
             self._upnp_device = None
@@ -1674,6 +1685,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._position_updated_at = utcnow()
                 self._media_image_url = None
                 self._media_uri = None
+                self._media_uri_final = None
                 self._ice_skip_throt = False
                 self._unav_throttle = False
                 self.schedule_update_ha_state(True)
@@ -1682,12 +1694,35 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._master.play_track(track)
 
 
+
+    def _detect_stream_url_redirection(self, uri):
+        #_LOGGER.debug('For: %s detecting URI redirect - from:   %s', self._name, uri)
+        redirect_detect = True
+        check_uri = uri
+        try:
+            while redirect_detect:
+                response_location = requests.head(check_uri, allow_redirects=False, headers={'User-Agent': 'VLC/3.0.15 LibVLC/3.0.15'})
+                #_LOGGER.debug('For: %s detecting URI redirect code: %s', self._name, str(response_location.status_code))
+                if response_location.status_code in [301, 302, 303, 307, 308] and 'Location' in response_location.headers:
+                    #_LOGGER.debug('For: %s detecting URI redirect location: %s', self._name, response_location.headers['Location'])
+                    check_uri = response_location.headers['Location']
+                else:
+                    #_LOGGER.debug('For: %s detecting URI redirect - result: %s', self._name, check_uri)
+                    redirect_detect = False
+        except:
+            pass
+
+        return check_uri
+
+
+
     @Throttle(ICE_THROTTLE)
     def _update_from_icecast(self):
         """Update track info from icecast stream."""
         if self._icecast_meta == 'Off':
             return True
-        #_LOGGER.debug('Looking for IceCast metadata: %s', self._name)
+
+        #_LOGGER.debug('For: %s Looking for IceCast metadata in: %s', self._name, self._media_uri_final)
 
 #        def NiceToICY(self):
 #            class InterceptedHTTPResponse():
@@ -1703,8 +1738,9 @@ class LinkPlayDevice(MediaPlayerEntity):
 #        ORIGINAL_HTTP_CLIENT_READ_STATUS = urllib.request.http.client.HTTPResponse._read_status
 #        urllib.request.http.client.HTTPResponse._read_status = NiceToICY
 
+
         try:
-            request = urllib.request.Request(self._media_uri, headers={'Icy-MetaData': 1})  # request metadata
+            request = urllib.request.Request(self._media_uri_final, headers={'Icy-MetaData': 1})  # request metadata
             response = urllib.request.urlopen(request)
         except:  # (urllib.error.HTTPError)
             self._media_title = None
@@ -1860,15 +1896,24 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._media_image_url = None
             return
 
+        coverart_url = None
         self._lfmapi.call('GET', 'track.getInfo', "artist={0}&track={1}".format(self._media_artist, self._media_title))
         lfmdata = json.loads(self._lfmapi.data)
         try:
-            self._media_image_url = lfmdata['track']['album']['image'][3]['#text']
+            coverart_url = lfmdata['track']['album']['image'][3]['#text']
         except (ValueError, KeyError):
-            self._media_image_url = None
+            coverart_url = None
 
-        if self._media_image_url == '':
+        if coverart_url == '' or coverart_url == None:
             self._media_image_url = None
+        else:
+            if coverart_url.find('2a96cbd8b46e442fc41c2b86b821562f') != -1:
+                # don't show the sheriff star empty cover https://lastfm.freetls.fastly.net/i/u/300x300/2a96cbd8b46e442fc41c2b86b821562f.png
+                self._media_image_url = None
+            else:
+                self._media_image_url = coverart_url
+
+        #_LOGGER.debug('For: %s lastfm _media_image_url: %s', self._name, self._media_image_url)
 
     def upnp_discover(self, timeout=5):
         devices = {}
@@ -1903,6 +1948,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._media_title = None
                 self._media_artist = None
                 self._media_uri = None
+                self._media_uri_final = None
                 self._media_image_url = None
                 self._state = STATE_IDLE
                 return True
@@ -2042,9 +2088,11 @@ class LinkPlayDevice(MediaPlayerEntity):
             try:
                 if self._playing_stream and player_status['uri'] != "":
                     try:
-                        self._media_uri = str(bytearray.fromhex(player_status['uri']).decode('utf-8'))
+                        self._media_uri_final = str(bytearray.fromhex(player_status['uri']).decode('utf-8'))
                     except ValueError:
-                        self._media_uri = player_status['uri']
+                        self._media_uri_final = player_status['uri']
+                    if not self._media_uri:
+                        self._media_uri = self._media_uri_final
             except KeyError:
                 pass
 
@@ -2129,7 +2177,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 elif self._state == STATE_PLAYING and self._media_uri and int(player_status['totlen']) > 0 and not self._snapshot_active and not self._playing_tts:
                     self._get_playerstatus_metadata(player_status)
 
-                elif self._state == STATE_PLAYING and self._media_uri and int(player_status['totlen']) <= 0 and not self._snapshot_active and not self._playing_tts:
+                elif self._state == STATE_PLAYING and self._media_uri_final and int(player_status['totlen']) <= 0 and not self._snapshot_active and not self._playing_tts:
                     if self._ice_skip_throt:
                         self._update_from_icecast(no_throttle=True)
                         self._ice_skip_throt = False
