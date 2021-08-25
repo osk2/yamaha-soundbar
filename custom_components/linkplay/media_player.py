@@ -100,6 +100,7 @@ CONF_LEDOFF = 'led_off'
 LASTFM_API_BASE = 'http://ws.audioscrobbler.com/2.0/?method='
 MAX_VOL = 100
 FW_MROOM_RTR_MIN = '4.2.8020'
+FW_RAKOIT_UART_MIN = '4.2.9326'
 UPNP_TIMEOUT = 2
 TCPPORT = 8899
 ICE_THROTTLE = timedelta(seconds=60)
@@ -210,6 +211,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                  ):
         """Initialize the Linkplay device."""
         self._fw_ver = '1.0.0'
+        self._mcu_ver = ''
         self._uuid = ''
         self._features = None
         self._preset_key = 4
@@ -503,13 +505,14 @@ class LinkPlayDevice(MediaPlayerEntity):
     def device_state_attributes(self):
         """List members in group and set master and slave state."""
         attributes = {}
-        if self._multiroom_group is not None:
+        if self._multiroom_group != []:
             attributes = {ATTR_LINKPLAY_GROUP: self._multiroom_group}
 
         attributes[ATTR_MASTER] = self._is_master
-        attributes[ATTR_SLAVE] = self._slave_mode
-        attributes[ATTR_FWVER] = self._fw_ver + ", uuid: " + self._uuid
-        attributes[ATTR_STURI] = self._media_uri_final
+        if self._slave_mode:
+            attributes[ATTR_SLAVE] = self._slave_mode
+        if self._media_uri_final:
+            attributes[ATTR_STURI] = self._media_uri_final
         if len(self._trackq) > 0:
             attributes[ATTR_TRCNT] = len(self._trackq) - 1
             attributes[ATTR_TRCRT] = self._trackc
@@ -533,6 +536,8 @@ class LinkPlayDevice(MediaPlayerEntity):
 
 #        elif self._playing_liveinput:
 #            attributes[ATTR_DEBUG] = "_playing_liveinput"
+
+        attributes[ATTR_FWVER] = self._fw_ver + "." + self._mcu_ver
 
         return attributes
 
@@ -2013,20 +2018,25 @@ class LinkPlayDevice(MediaPlayerEntity):
                         try:
                             self._fw_ver = device_status['firmware']
                         except KeyError:
-                            fw_ver = '1.0.0'
+                            self._fw_ver = '1.0.0'
+
+                        try:
+                            self._mcu_ver = device_status['mcu_ver']
+                        except KeyError:
+                            self._mcu_ver = ''
 
                         try:
                             self._preset_key = int(device_status['preset_key'])
                         except KeyError:
-                            preset_key = 4
+                            self._preset_key = 4
 
                         try:
-                            self._uuid = device_status['uuid']  # FF31F09E - Arylic
+                            self._uuid = device_status['uuid']
                         except KeyError:
                             self._uuid = self._host
 
                         if self._led_off:
-                            if self._uuid.find(UUID_ARYLIC) != -1 and self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_MROOM_RTR_MIN):
+                            if self._uuid.find(UUID_ARYLIC) == 0 and self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_RAKOIT_UART_MIN):
                                 self._tcpapi.call('MCU+PAS+RAKOIT:LED:0&')
                                 _LOGGER.info("LED turn off: %s, %s, response: %s", self.entity_id, self._name, self._tcpapi.data)
 
