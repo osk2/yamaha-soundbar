@@ -515,7 +515,8 @@ class LinkPlayDevice(MediaPlayerEntity):
             attributes[ATTR_STURI] = self._media_uri_final
         if len(self._trackq) > 0:
             attributes[ATTR_TRCNT] = len(self._trackq) - 1
-            attributes[ATTR_TRCRT] = self._trackc
+            if self._trackc:
+                attributes[ATTR_TRCRT] = self._trackc
 
         if self._upnp_device is None:
             attributes[ATTR_DEBUG] = "UPnP not detected"
