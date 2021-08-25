@@ -96,6 +96,10 @@ If you don't want a source selector to be available at all, set option to empty:
 **multiroom_wifidirect:**  
   *(boolean)* *(Optional)* Set to `True` to override the default router mode used by the component with wifi-direct connection mode (more details below).
 
+**led_off:**  
+  *(boolean)* *(Optional)* Set to `True` to turn off the LED on the front panel of the Arylic devices (works only for this brand).
+
+
 ## Multiroom
 
 Linkplay devices support multiroom in two modes:
