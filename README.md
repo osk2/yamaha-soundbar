@@ -180,7 +180,7 @@ Implemented commands:
 - `TimeSync` - is for units on networks not connected to internet to compensate for an unreachable NTP server. Correct time is needed for the alarm clock functionality (not implemented yet here)
 - `Reboot` - as name implies (a soft-reboot, only seems to restart the main loop in the Linkplay module, not MCU or other part).
 - `RouterMultiroomEnable` - router mode is available by default in firmwares above v4.2.8020, but there’s also a logic included to build it up, this command ensures to set the good priority. Only use if you have issues with multiroom in router mode.
-- `MCU+XXX+XXX` - passthrough for direct TCP UART commands [supported by the module](http://developer.arylic.com/download/SA50_TCP_API.pdf). Input not validated, use at your own risk.
+- `MCU+XXX+XXX` - passthrough for direct TCP UART commands [supported by the module](https://forum.arylic.com/t/home-assistant-integratio-available/729/23). Input not validated, use at your own risk.
 
 If parameter `notify: False` is omitted, results will appear in Lovelace UI's left pane as persistent notifications which can be dismissed. You can specify multiple entity ids separated by comma or use `all` to run the service against.
 
