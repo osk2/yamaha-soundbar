@@ -309,14 +309,14 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def icon(self):
         """Return the icon of the device."""
+        if self._state in [STATE_PAUSED, STATE_UNAVAILABLE, STATE_IDLE, STATE_UNKNOWN]:
+            return ICON_DEFAULT
+
         if self._muted:
             return ICON_MUTED
 
         if self._slave_mode or self._is_master:
             return ICON_MULTIROOM
-
-        if self._state in [STATE_PAUSED, STATE_UNAVAILABLE]:
-            return ICON_DEFAULT
 
         if self._source == "Bluetooth":
             return ICON_BLUETOOTH
