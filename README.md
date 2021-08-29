@@ -123,6 +123,8 @@ To exit from the multiroom group, use the entity ids of the players that need to
 ```
 These services are compatible out of the box with the speaker group object in @kalkih's [Mini Media Player](https://github.com/kalkih/mini-media-player) card for Lovelace UI.
 
+Since v2.0.37 of this component it's also possible to use Home Assistant's [standard multiroom](https://www.home-assistant.io/integrations/media_player/#service-media_playerjoin) join and unjoin functions for multiroom control.
+
 *Tip*: if you experience temporary `Unavailable` status on the slaves afer unjoining from a multiroom group in router mode, run once the Linkplay-specific command `RouterMultiroomEnable` - see details further down.
 
 ## Presets
