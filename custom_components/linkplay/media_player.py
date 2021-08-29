@@ -37,11 +37,12 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
 )
 from homeassistant.components.media_player import (
-    DEVICE_CLASS_SPEAKER, 
-    BrowseMedia, 
+    DEVICE_CLASS_SPEAKER,
+    BrowseMedia,
     MediaPlayerEntity,
 )
 from homeassistant.components.media_player.const import (
+    ATTR_GROUP_MEMBERS,
     MEDIA_TYPE_MUSIC,
     MEDIA_TYPE_URL,
     MEDIA_TYPE_TRACK,
@@ -62,6 +63,7 @@ from homeassistant.components.media_player.const import (
     SUPPORT_VOLUME_SET,
     SUPPORT_VOLUME_STEP,
     SUPPORT_STOP,
+    SUPPORT_GROUPING,
     REPEAT_MODE_ALL,
     REPEAT_MODE_OFF,
     REPEAT_MODE_ONE,
@@ -97,6 +99,7 @@ CONF_MULTIROOM_WIFIDIRECT = 'multiroom_wifidirect'
 CONF_VOLUME_STEP = 'volume_step'
 CONF_LEDOFF = 'led_off'
 
+DEBUGSTR_ATTR = False
 LASTFM_API_BASE = 'http://ws.audioscrobbler.com/2.0/?method='
 MAX_VOL = 100
 FW_MROOM_RTR_MIN = '4.2.8020'
@@ -109,6 +112,7 @@ MROOM_UJWDIR = timedelta(seconds=20)
 MROOM_UJWROU = timedelta(seconds=3)
 ROOTDIR_USB = '/media/sda1/'
 UUID_ARYLIC = 'FF31F09E'
+
 
 DEFAULT_ICECAST_UPDATE = 'StationName'
 DEFAULT_MULTIROOM_WIFIDIRECT = False
@@ -305,16 +309,19 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def icon(self):
         """Return the icon of the device."""
-        if self._muted or self._state in [STATE_PAUSED, STATE_UNAVAILABLE]:
+        if self._muted:
             return ICON_MUTED
 
         if self._slave_mode or self._is_master:
             return ICON_MULTIROOM
 
+        if self._state in [STATE_PAUSED, STATE_UNAVAILABLE]:
+            return ICON_DEFAULT
+
         if self._source == "Bluetooth":
             return ICON_BLUETOOTH
 
-        if self._source == "DLNA" or self._source == "Airplay":
+        if self._source == "DLNA" or self._source == "Airplay" or self._source == "Spotify":
             return ICON_PUSHSTREAM
 
         if self._state == STATE_PLAYING:
@@ -376,26 +383,26 @@ class LinkPlayDevice(MediaPlayerEntity):
         if self._playing_localfile or self._playing_spotify or self._playing_webplaylist:
             if self._state in [STATE_PLAYING, STATE_PAUSED]:
                 self._features = \
-                SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | \
+                SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | SUPPORT_GROUPING | \
                 SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
                 SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE | \
                 SUPPORT_NEXT_TRACK | SUPPORT_PREVIOUS_TRACK | SUPPORT_SHUFFLE_SET | SUPPORT_REPEAT_SET | SUPPORT_SEEK
             else:
                 self._features = \
-                SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | \
+                SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | SUPPORT_GROUPING | \
                 SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
                 SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE | \
                 SUPPORT_NEXT_TRACK | SUPPORT_PREVIOUS_TRACK | SUPPORT_SHUFFLE_SET | SUPPORT_REPEAT_SET
 
         elif self._playing_stream:
             self._features = \
-            SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | \
+            SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | SUPPORT_GROUPING | \
             SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
             SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE
 
         elif self._playing_liveinput:
             self._features = \
-            SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | \
+            SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | SUPPORT_GROUPING | \
             SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
             SUPPORT_STOP
 
@@ -407,7 +414,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def media_position(self):
         """Time in seconds of current playback head position."""
-        if self._playing_localfile or self._playing_spotify or self._slave_mode:
+        if (self._playing_localfile or self._playing_spotify or self._slave_mode) and self._state != STATE_UNAVAILABLE:
             return self._playhead_position
         else:
             return None
@@ -415,7 +422,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def media_duration(self):
         """Time in seconds of current song duration."""
-        if self._playing_localfile or self._playing_spotify or self._slave_mode:
+        if (self._playing_localfile or self._playing_spotify or self._slave_mode) and self._state != STATE_UNAVAILABLE:
             return self._duration
         else:
             return None
@@ -423,7 +430,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def media_position_updated_at(self):
         """When the seek position was last updated."""
-        if not self._playing_liveinput:
+        if not self._playing_liveinput and self._state != STATE_UNAVAILABLE:
             return self._position_updated_at
         else:
             return None
@@ -460,11 +467,8 @@ class LinkPlayDevice(MediaPlayerEntity):
 
     @property
     def media_content_type(self):
-        """Content type of current playing media."""
-        if self._playing_stream:
-            return MEDIA_TYPE_URL
-        else:
-            return MEDIA_TYPE_MUSIC
+        """Content type of current playing media. Has to be MEDIA_TYPE_MUSIC in order for Lovelace to show both artist and title."""
+        return MEDIA_TYPE_MUSIC
 
     @property
     def ssid(self):
@@ -506,7 +510,8 @@ class LinkPlayDevice(MediaPlayerEntity):
         """List members in group and set master and slave state."""
         attributes = {}
         if self._multiroom_group != []:
-            attributes = {ATTR_LINKPLAY_GROUP: self._multiroom_group}
+            attributes[ATTR_LINKPLAY_GROUP] = self._multiroom_group
+            attributes[ATTR_GROUP_MEMBERS] = self._multiroom_group
 
         attributes[ATTR_MASTER] = self._is_master
         if self._slave_mode:
@@ -518,27 +523,35 @@ class LinkPlayDevice(MediaPlayerEntity):
             if self._trackc:
                 attributes[ATTR_TRCRT] = self._trackc
 
-        if self._upnp_device is None:
-            attributes[ATTR_DEBUG] = "UPnP not detected"
-        else:
-            attributes[ATTR_DEBUG] = "UPnP detected"
 
-#        if self._playing_localfile:
-#            attributes[ATTR_DEBUG] = "_playing_localfile"
+        if DEBUGSTR_ATTR:
+            if self._upnp_device is None:
+                atrdbg = "UPnP not detected"
+            else:
+                atrdbg= "UPnP detected"
 
-#        elif self._playing_spotify:
-#            attributes[ATTR_DEBUG] = "_playing_spotify"
+            if self._playing_localfile:
+                atrdbg = atrdbg + " _playing_localfile"
 
-#        elif self._playing_webplaylist:
-#            attributes[ATTR_DEBUG] = "_playing_webplaylist"
+            if self._playing_spotify:
+                atrdbg = atrdbg + " _playing_spotify"
 
-#        elif self._playing_stream:
-#            attributes[ATTR_DEBUG] = "_playing_stream"
+            if self._playing_webplaylist:
+                atrdbg = atrdbg + " _playing_webplaylist"
 
-#        elif self._playing_liveinput:
-#            attributes[ATTR_DEBUG] = "_playing_liveinput"
+            if self._playing_stream:
+                atrdbg = atrdbg + " _playing_stream"
 
-        attributes[ATTR_FWVER] = self._fw_ver + "." + self._mcu_ver
+            if self._playing_liveinput:
+                atrdbg = atrdbg + " _playing_liveinput"
+
+            if self._playing_tts:
+                atrdbg = atrdbg + " _playing_tts"
+
+            attributes[ATTR_DEBUG] = atrdbg
+
+        if self._state != STATE_UNAVAILABLE:
+            attributes[ATTR_FWVER] = self._fw_ver + "." + self._mcu_ver
 
         return attributes
 
@@ -750,6 +763,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     for slave in self._slave_list:
                         slave.set_state(self._state)
                         slave.set_position_updated_at(self.media_position_updated_at)
+#                self.schedule_update_ha_state(True)
             else:
                 _LOGGER.warning("Failed to pause playback. Device: %s, Got response: %s", self.entity_id, value)
         else:
@@ -821,13 +835,14 @@ class LinkPlayDevice(MediaPlayerEntity):
 
     def media_seek(self, position):
         """Send media_seek command to media player."""
-        if not self._slave_mode and position < self._duration:
-            self._lpapi.call('GET', 'setPlayerCmd:seek:{0}'.format(str(position)))
-            value = self._lpapi.data
-            self._position_updated_at = utcnow()
-            self._wait_for_mcu = 0.1
-            if value != "OK":
-                _LOGGER.warning("Failed to seek. Device: %s, Got response: %s", self.entity_id, value)
+        if not self._slave_mode:
+            if self._duration > 0 and position >= 0 and position <= self._duration:
+                self._lpapi.call('GET', 'setPlayerCmd:seek:{0}'.format(str(position)))
+                value = self._lpapi.data
+                self._position_updated_at = utcnow()
+                self._wait_for_mcu = 0.2
+                if value != "OK":
+                    _LOGGER.warning("Failed to seek. Device: %s, Got response: %s", self.entity_id, value)
         else:
             self._master.media_seek(position)
 
@@ -951,6 +966,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._playhead_position = 0
                     self._duration = 0
                     self._trackc = None
+                    self._position_updated_at = utcnow()
                     if self._slave_list is not None:
                         for slave in self._slave_list:
                             slave.set_source(source)
@@ -1031,8 +1047,19 @@ class LinkPlayDevice(MediaPlayerEntity):
             else:
                 self._master.preset_button(preset)
 
+    def join_players(self, slaves):
+        """Join `group_members` as a player group with the current player (standard HA)."""
+        entities = self.hass.data[DOMAIN].entities
+        entities = [e for e in entities if e.entity_id in slaves]
+        self.join(entities)
+
+
+#                    for device in self.hass.data[DOMAIN].entities:
+#                        if device._name == slave['name']:
+
+
     def join(self, slaves):
-        """Add selected slaves to multiroom configuration."""
+        """Add selected slaves to multiroom configuration (original implementation)."""
         if self._state == STATE_UNAVAILABLE:
             return
 
@@ -1119,6 +1146,16 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         else:
             _LOGGER.warning("Failed to unjoin_all multiroom. " "Device: %s, Got response: %s", self.entity_id, value)
+
+
+    def unjoin_player(self):
+        """Remove this player from any group (standard HA)."""
+        if self._is_master:
+            self.unjoin_all()
+
+        if self._slave_mode:
+            self.unjoin_me()
+
 
     def unjoin_me(self):
         """Disconnect myself from the multiroom configuration."""
@@ -2052,8 +2089,8 @@ class LinkPlayDevice(MediaPlayerEntity):
                                     break
 
                         if self._first_update:
-                            self._position_updated_at = utcnow()
                             self._duration = 0
+                            self._position_updated_at = utcnow()
                             self._playhead_position = 0
                             if "udisk" in self._source_list:
                                 self._tracklist_via_upnp("USB")
@@ -2090,12 +2127,13 @@ class LinkPlayDevice(MediaPlayerEntity):
             }.get(player_status['status'], STATE_IDLE)
 
             if self._state in [STATE_PLAYING, STATE_PAUSED]:
-                self._position_updated_at = utcnow()
                 self._duration = int(int(player_status['totlen']) / 1000)
                 self._playhead_position = int(int(player_status['curpos']) / 1000)
+                self._position_updated_at = utcnow()
             else:
                 self._duration = 0
                 self._playhead_position = 0
+                self._position_updated_at = utcnow()
 
             self._playing_spotify = bool(player_status['mode'] == '31')
             self._playing_liveinput = player_status['mode'] in SOURCES_LIVEIN
@@ -2143,7 +2181,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             else:
                 self._source = 'Web playlist'
 
-            if self._source != 'Network' and not (self._playing_stream or self._playing_localfile):
+            if self._source != 'Network' and not (self._playing_stream or self._playing_localfile or self._playing_spotify):
                 if self._source == 'Idle':
                     self._media_title = None
                     self._state = STATE_IDLE
