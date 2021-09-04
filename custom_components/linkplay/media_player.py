@@ -99,7 +99,7 @@ CONF_MULTIROOM_WIFIDIRECT = 'multiroom_wifidirect'
 CONF_VOLUME_STEP = 'volume_step'
 CONF_LEDOFF = 'led_off'
 
-DEBUGSTR_ATTR = False
+DEBUGSTR_ATTR = True
 LASTFM_API_BASE = 'http://ws.audioscrobbler.com/2.0/?method='
 MAX_VOL = 100
 FW_MROOM_RTR_MIN = '4.2.8020'
@@ -110,9 +110,9 @@ ICE_THROTTLE = timedelta(seconds=60)
 UNA_THROTTLE = timedelta(seconds=120)
 MROOM_UJWDIR = timedelta(seconds=20)
 MROOM_UJWROU = timedelta(seconds=3)
+SPOTIFY_PAUSED_TIMEOUT = timedelta(seconds=300)
 ROOTDIR_USB = '/media/sda1/'
 UUID_ARYLIC = 'FF31F09E'
-
 
 DEFAULT_ICECAST_UPDATE = 'StationName'
 DEFAULT_MULTIROOM_WIFIDIRECT = False
@@ -242,6 +242,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._playhead_position = 0
         self._duration = 0
         self._position_updated_at = None
+        self._spotify_paused_at = None
         self._shuffle = False
         self._repeat = REPEAT_MODE_OFF
         self._media_album = None
@@ -430,7 +431,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def media_position_updated_at(self):
         """When the seek position was last updated."""
-        if not self._playing_liveinput and self._state != STATE_UNAVAILABLE:
+        if not self._playing_liveinput and self._state == STATE_PLAYING:
             return self._position_updated_at
         else:
             return None
@@ -758,6 +759,8 @@ class LinkPlayDevice(MediaPlayerEntity):
             value = self._lpapi.data
             if value == "OK":
                 self._position_updated_at = utcnow()
+                if self._playing_spotify:
+                    self._spotify_paused_at = utcnow()
                 self._state = STATE_PAUSED
                 if self._slave_list is not None:
                     for slave in self._slave_list:
@@ -793,6 +796,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._trackc = None
                 self._media_image_url = None
                 self._position_updated_at = utcnow()
+                self._spotify_paused_at = None
                 self.schedule_update_ha_state(True)
                 if self._slave_list is not None:
                     for slave in self._slave_list:
@@ -2076,7 +2080,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                         if self._led_off:
                             if self._uuid.find(UUID_ARYLIC) == 0 and self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_RAKOIT_UART_MIN):
                                 self._tcpapi.call('MCU+PAS+RAKOIT:LED:0&')
-                                _LOGGER.info("LED turn off: %s, %s, response: %s", self.entity_id, self._name, self._tcpapi.data)
+                                _LOGGER.debug("LED turn off: %s, %s, response: %s", self.entity_id, self._name, self._tcpapi.data)
 
                         if not self._multiroom_wifidirect and self._fw_ver:
                             if self._fwvercheck(self._fw_ver) < self._fwvercheck(FW_MROOM_RTR_MIN):
@@ -2111,12 +2115,13 @@ class LinkPlayDevice(MediaPlayerEntity):
 
             self._shuffle = {
                 '2': True,
+                '3': True,
             }.get(player_status['loop'], False)
 
             self._repeat = {
-                '2': REPEAT_MODE_ALL,
-                '3': REPEAT_MODE_ALL,
                 '1': REPEAT_MODE_ONE,
+                '2': REPEAT_MODE_ALL,
+                '0': REPEAT_MODE_ALL,
             }.get(player_status['loop'], REPEAT_MODE_OFF)
 
             self._state = {
@@ -2198,17 +2203,34 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._state = STATE_PLAYING
                 self._media_title = self._source
 
+            if self._playing_spotify and self._state == STATE_IDLE:
+                self._source = None
+
+            if self._spotify_paused_at != None:
+                if utcnow() >= (self._spotify_paused_at + SPOTIFY_PAUSED_TIMEOUT):
+                    # Prevent sticking in Pause mode for a long time (Spotify doesn't have a stop button on the app)
+                    self.media_stop()
+                    return
+
             if player_status['mode'] in ['11', '16'] and len(self._trackq) <= 0:
                 if int(player_status['curpos']) > 6000 and self._state == STATE_PLAYING:
                     self._tracklist_via_upnp("USB")
 
             if self._playing_spotify:
-                self._update_via_upnp()
+                if self._state != STATE_IDLE:
+                    self._update_via_upnp()
+                if self._state == STATE_PAUSED:
+                    if self._spotify_paused_at == None:
+                        self._spotify_paused_at = utcnow()
+                else:
+                    self._spotify_paused_at = None
 
             elif self._playing_webplaylist:
-                self._update_via_upnp()
+                if self._state != STATE_IDLE:
+                    self._update_via_upnp()
 
             else:
+                self._spotify_paused_at = None
                 if self._state not in [STATE_PLAYING, STATE_PAUSED]:
                     self._media_title = None
                     self._media_artist = None
