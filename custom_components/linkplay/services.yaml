@@ -49,7 +49,7 @@ command:
       description: Entity ID of the player on which the command wil be execuded.
       example: media_player.sound_room1
     command:
-      description: 'Reboot, Rescan, PromptEnable, PromptDisable, WriteDeviceNameToUnit: My Device Name, SetApSSIDName: NewWifiName, SetRandomWifiKey, TimeSync, RouterMultiroomEnable'
+      description: 'Rescan, PromptEnable, PromptDisable, WriteDeviceNameToUnit: My Device Name, SetApSSIDName: NewWifiName, SetRandomWifiKey, TimeSync, RouterMultiroomEnable'
       example: Rescan
     notify:
       description: Displays the result of the command as a persistent notification in Lovelace UI (optional, defaults to True). Set to False during automations to avoid seeing these.
