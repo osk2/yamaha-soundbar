@@ -180,7 +180,6 @@ Implemented commands:
 - `"SetApSSIDName: NewWifiName"` - change the SSID name of the AP created by the unit for wifidirect multiroom connections. Needs to be in qoutes.
 - `SetRandomWifiKey`- perhaps as an extra security feature, one could make an automation to change the keys on the APs to some random values periodically.
 - `TimeSync` - is for units on networks not connected to internet to compensate for an unreachable NTP server. Correct time is needed for the alarm clock functionality (not implemented yet here)
-- `Reboot` - as name implies (a soft-reboot, only seems to restart the main loop in the Linkplay module, not MCU or other part).
 - `RouterMultiroomEnable` - router mode is available by default in firmwares above v4.2.8020, but there’s also a logic included to build it up, this command ensures to set the good priority. Only use if you have issues with multiroom in router mode.
 - `MCU+XXX+XXX` - passthrough for direct TCP UART commands [supported by the module](https://forum.arylic.com/t/home-assistant-integratio-available/729/23). Input not validated, use at your own risk.
 
