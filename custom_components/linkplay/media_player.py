@@ -507,7 +507,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         return DEVICE_CLASS_SPEAKER
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """List members in group and set master and slave state."""
         attributes = {}
         if self._multiroom_group != []:
