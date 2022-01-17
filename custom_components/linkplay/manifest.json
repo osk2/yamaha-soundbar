@@ -14,7 +14,7 @@
   "requirements": [
     "uPnPClient~=0.0",
     "validators~=0.12",
-	  "chardet>=4.0.0"
+    "chardet>=4.0.0"
   ],
   "ssdp": [
     {
