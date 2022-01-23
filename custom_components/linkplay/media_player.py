@@ -36,8 +36,8 @@ from homeassistant.const import (
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
 )
+from homeassistant.components.media_player import MediaPlayerDeviceClass
 from homeassistant.components.media_player import (
-    DEVICE_CLASS_SPEAKER,
     BrowseMedia,
     MediaPlayerEntity,
 )
@@ -502,9 +502,8 @@ class LinkPlayDevice(MediaPlayerEntity):
         return self._is_master
 
     @property
-    def device_class(self):
-        """Return the device class of this entity, if any."""
-        return DEVICE_CLASS_SPEAKER
+    def device_class(self) -> MediaPlayerDeviceClass:
+        return MediaPlayerDeviceClass.SPEAKER
 
     @property
     def extra_state_attributes(self):
