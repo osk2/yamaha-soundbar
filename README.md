@@ -15,7 +15,9 @@ Fully compatible with [Mini Media Player card for Lovelace UI](https://github.co
 
 ### Configuration
 
-It is recommended to create static DHCP leases in your network router to ensure the devices always get the same IP address. To add Linkplay units to your installation, add the following to your `configuration.yaml` file:
+It is recommended to create static DHCP leases in your network router to ensure the devices always get the same IP address. Recent firmware versions allow setting static IP address, if you see that option, use it.
+
+To add Linkplay units to your installation, add the following to your `configuration.yaml` file:
 
 ```yaml
 # Example configuration.yaml entry
