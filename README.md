@@ -33,7 +33,7 @@ media_player:
           'optical': 'TV sound', 
           'line-in': 'Radio tuner', 
           'bluetooth': 'Bluetooth',
-          'udisk': 'USB stick'
+          'udisk': 'USB stick',
           'http://94.199.183.186:8000/jazzy-soul.mp3': 'Jazzy Soul',
         }
 
