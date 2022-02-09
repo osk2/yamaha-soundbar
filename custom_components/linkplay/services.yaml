@@ -1,79 +1,177 @@
 join:
+  name: Join
   description: Group players together in a multiroom setup.
   fields:
     master:
+      name: Master Entity ID
       description: Entity ID of the player that should become the master of the group.
       example: media_player.sound_room2
+      required: true
+      selector:
+        entity:
+          integration: linkplay
     entity_id:
-      description: Entity ID(s) of the player(s) that will connect to the master.
+      name: Slave Entity ID
+      description: Entity ID(s) of the player(s) that will connect to the master. Switch to YAML mode to manually add more, separated by comma.
       example: media_player.sound_room1
+      required: true
+      selector:
+        entity:
+          integration: linkplay
 
 unjoin:
+  name: Unjoin
   description: Unjoin a player or all players from the multiroom setup.
   fields:
     entity_id:
+      name: Entity ID
       description: Entity ID(s) of the player(s) that will be unjoined from the group. If this is a master, all slaves will be unjoined.
       example: media_player.sound_room2
+      required: true
+      selector:
+        entity:
+          integration: linkplay
 
 snapshot:
+  name: Snapshot
   description: Prepare the player to play TTS and save the current state of it for restore afterwards. Current playback will stop.
   fields:
     entity_id:
+      name: Entity ID
       description: Entity ID of the player of which the snapshot should be saved.
       example: media_player.sound_room1
+      required: true
+      selector:
+        entity:
+          integration: linkplay
     switchinput:
-      description: Switch player to stream input along with snapshotting, before playing TTS. Applies for players with multiple inputs like Line-in, Optical, etc. Useful to handle the situation when first few seconds of the TTS message are cut off due to the latency of the player. Optional - if not specified, defaults to True.
-      example: True
+      name: Switch Input
+      description: Switch player to stream input along with snapshotting, before playing TTS. Applies for players with multiple inputs like Line-in, Optical, etc. Useful to try to handle the situation when first few seconds of the TTS message are cut off due to the latency of the player. Optional - if not specified, defaults to True.
+      example: false
+      required: false
+      default: true
+      selector:
+        boolean:
 
 restore:
+  name: Restore
   description: Restore the state of the player after playing TTS, from a saved snapshot.
   fields:
     entity_id:
+      name: Entity ID
       description: Entity ID of the player of which the snapshot should be restored.
       example: media_player.sound_room1
+      required: true
+      selector:
+        entity:
+          integration: linkplay
 
 preset:
+  name: Preset
   description: Recall content preset from the device.
   fields:
     entity_id:
+      name: Entity ID
       description: Entity ID of the player for which the preset will be recalled.
       example: media_player.sound_room1
+      required: true
+      selector:
+        entity:
+          integration: linkplay
     preset:
+      name: Preset
       description: Content preset number on the device
       example: 1
-
+      required: true
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 36
+          mode: box
 command:
+  name: Command
   description: Execute various linkplay-specific commands on the player.
   fields:
     entity_id:
-      description: Entity ID of the player on which the command wil be execuded.
+      name: Entity ID
+      description: Entity ID of the player against which the command wil be execuded.
       example: media_player.sound_room1
+      required: true
+      selector:
+        entity:
+          integration: linkplay
     command:
-      description: 'Update, Rescan, PromptEnable, PromptDisable, WriteDeviceNameToUnit: My Device Name, SetApSSIDName: NewWifiName, SetRandomWifiKey, TimeSync, RouterMultiroomEnable'
-      example: Rescan
+      name: Command
+      description: 'To set the names for WriteDeviceNameToUnit and SetApSSIDName please switch to YAML mode and enter the name there.'
+      example: Update
+      required: true
+      selector:
+        select:
+          options:
+            - Update
+            - Rescan
+            - PromptEnable
+            - PromptDisable
+            - SetRandomWifiKey
+            - TimeSync
+            - RouterMultiroomEnable
+            - 'WriteDeviceNameToUnit: My Device Name'
+            - 'SetApSSIDName: NewWifiName'
     notify:
+      name: Notification
       description: Displays the result of the command as a persistent notification in Lovelace UI (optional, defaults to True). Set to False during automations to avoid seeing these.
-      example: False
+      example: false
+      required: false
+      default: true
+      selector:
+        boolean:
 
 get_tracks:
+  name: Get tracks
   description: Retrieve the list of audio files available on the storage disk connected to the player, and fill an input_select with it.
   fields:
     entity_id:
+      name: Entity ID
       description: Entity ID of the player on which the audio filenames list should be retrieved for.
       example: media_player.sound_room1
+      required: true
+      selector:
+        entity:
+          integration: linkplay
     input_select:
+      name: Input Select Entity ID
       description: Entity ID of the input_select you want to populate with the audio track filenames retrieved from the device.
       example: input_select.tracks_room1
+      required: true
+      selector:
+        entity:
+          domain: input_select
     source:
+      name: Source
       description: Optional - only 'USB' supported for now.
       example: USB
+      required: false
+      default: 'USB'
+      selector:
+        text:
 
 play_track:
+  name: Play track
   description: Play media track by name found in the tracks list. This should be used in conjunction with an input_select populated with items using the linkplay.get_tracks service.
   fields:
     entity_id:
+      name: Entity ID
       description: Entity ID of the player on which the playback wil be execuded.
       example: media_player.sound_room1
+      required: true
+      selector:
+        entity:
+          integration: linkplay
     track:
+      name: Track
       description: (Part of) The name of the track from the list
       example: 'Commodores - Machine Gun Extended Mix.mp3'
+      required: true
+      selector:
+        text:
