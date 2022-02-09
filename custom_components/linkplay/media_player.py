@@ -1296,11 +1296,15 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._unav_throttle = False
             self._first_update = True
             self.schedule_update_ha_state(True)
-            value = "OK"
+            value = "Scheduled"
+        elif command == 'Update':
+            self.schedule_update_ha_state(True)
+            value = "Scheduled"
         else:
             value = "No such command implemented."
+            _LOGGER.warning("Player %s command: %s, result: %s", self.entity_id, command, value)
 
-        _LOGGER.warning("Player %s executed command: %s, result: %s", self.entity_id, command, value)
+        _LOGGER.debug("Player %s executed command: %s, result: %s", self.entity_id, command, value)
 
         if notif:
             self.hass.components.persistent_notification.async_create("<b>Executed command:</b><br>{0}<br><b>Result:</b><br>{1}".format(command, value), title=self.entity_id)

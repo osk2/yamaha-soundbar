@@ -176,14 +176,15 @@ Linkplay devices support some commands through the API, this is a wrapper to be 
         notify: False
 ```
 Implemented commands:
-- `Rescan` - do not wait for the current 60 second throttle cycle to reconnect to the unavailable devices, trigger testing for availability immediately
 - `PromptEnable` and `PromptDisable` - enable or disable the audio prompts played through the speakers when connecting to the network or joining multiroom etc.
 - `"WriteDeviceNameToUnit: My Device Name"` - change the friendly name of the device both in firmware and in Home Assistant. Needs to be in qoutes.
 - `"SetApSSIDName: NewWifiName"` - change the SSID name of the AP created by the unit for wifidirect multiroom connections. Needs to be in qoutes.
 - `SetRandomWifiKey`- perhaps as an extra security feature, one could make an automation to change the keys on the APs to some random values periodically.
-- `TimeSync` - is for units on networks not connected to internet to compensate for an unreachable NTP server. Correct time is needed for the alarm clock functionality (not implemented yet here)
+- `TimeSync` - is for units on networks not connected to internet to compensate for an unreachable NTP server. Correct time is needed for the alarm clock functionality (not implemented yet here).
 - `RouterMultiroomEnable` - router mode is available by default in firmwares above v4.2.8020, but there’s also a logic included to build it up, this command ensures to set the good priority. Only use if you have issues with multiroom in router mode.
 - `MCU+XXX+XXX` - passthrough for direct TCP UART commands [supported by the module](https://forum.arylic.com/t/home-assistant-integratio-available/729/23). Input not validated, use at your own risk.
+- `Update` - schedule an immediate poll status update of the player in Home Assistant. Don't call this too often!
+- `Rescan` - do not wait for the current 60 second throttle cycle to reconnect to the unavailable devices, trigger testing for availability immediately.
 
 If parameter `notify: False` is omitted, results will appear in Lovelace UI's left pane as persistent notifications which can be dismissed. You can specify multiple entity ids separated by comma or use `all` to run the service against.
 
