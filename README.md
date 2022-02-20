@@ -79,7 +79,7 @@ The sources can be renamed to your preference (change only the part _after_ **:*
 ```
 If you don't want a source selector to be available at all, set option to empty: `sources: {}`.
 
-_Note:_ Don't use HTTP**S** streams. Linkplay chipsets seem to have limited supporrt for HTTPS. Besides, using HTTPS is useless in practice for a public webradio stream, it's a waste of computig resources for this kind of usage.
+_Note:_ **Don't** use HTTP**S** streams. Linkplay chipsets seem to have limited supporrt for HTTPS. Besides, using HTTPS is useless in practice for a public webradio stream, it's a waste of computig resources for this kind of usage.
 
 **common_sources:**  
   *(list)* *(Optional)* Another list with sources which should appear on the device. Useful if you have multiple devices on the network and you'd like to maintain a common list of http-based internet radio stream sources for all of them in a single file with `!include linkplay-radio-sources.yaml`. The included file should be in the same place as the main config file containing `linkplay` platform.   
