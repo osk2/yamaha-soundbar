@@ -109,8 +109,6 @@ command:
       selector:
         select:
           options:
-            - Update
-            - Rescan
             - PromptEnable
             - PromptDisable
             - SetRandomWifiKey
@@ -127,38 +125,9 @@ command:
       selector:
         boolean:
 
-get_tracks:
-  name: Get tracks
-  description: Retrieve the list of audio files available on the storage disk connected to the player, and fill an input_select with it.
-  fields:
-    entity_id:
-      name: Entity ID
-      description: Entity ID of the player on which the audio filenames list should be retrieved for.
-      example: media_player.sound_room1
-      required: true
-      selector:
-        entity:
-          integration: linkplay
-    input_select:
-      name: Input Select Entity ID
-      description: Entity ID of the input_select you want to populate with the audio track filenames retrieved from the device.
-      example: input_select.tracks_room1
-      required: true
-      selector:
-        entity:
-          domain: input_select
-    source:
-      name: Source
-      description: Optional - only 'USB' supported for now.
-      example: USB
-      required: false
-      default: 'USB'
-      selector:
-        text:
-
 play_track:
   name: Play track
-  description: Play media track by name found in the tracks list. This should be used in conjunction with an input_select populated with items using the linkplay.get_tracks service.
+  description: Play media track by name found in the tracks list.
   fields:
     entity_id:
       name: Entity ID

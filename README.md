@@ -11,11 +11,18 @@ Fully compatible with [Mini Media Player card for Lovelace UI](https://github.co
 * Add the configuration to your configuration.yaml.
 * Restart Home-Assistant again.
 
+**Breaking change from v2:** After upgrading to v3 the configured devices will be re-added to HA with a new unique identifier tied to 
+the hardware UUID of the Linkplay modules, instead of IP address. This will result in having the original
+entity_id of the preiously configured devices _disabled_ and having added as new with entity_id _2 or similar.
+
+This can be easily fixed in Home Assistant, visit your entites list, click the old entity_id and delete it.
+Then click the newly generated entity_id _2 and name it back to what preiously was. Your automations can remain unchanged.
+
 [Support forum](https://community.home-assistant.io/t/linkplay-integration/33878/133)
 
 ### Configuration
 
-It is recommended to create static DHCP leases in your network router to ensure the devices always get the same IP address. Recent firmware versions allow setting static IP address, if you see that option, use it.
+It is recommended to create static DHCP leases in your network router to ensure the devices always get the same IP address. Recent models versions allow setting static IP address, if you see that option, use it.
 
 To add Linkplay units to your installation, add the following to your `configuration.yaml` file:
 
@@ -51,7 +58,7 @@ media_player:
   *(string)* *(Required)* The IP address of the Linkplay unit.
 
 **name:**  
-  *(string)* *(Required)* Name that Home Assistant will generate the `entity_id` based on. It is also the base of the friendly name seen in Lovelace UI, but will be overriden by the device name set in the Android app.
+  *(string)* *(Optional)* Name that Home Assistant will generate the `entity_id` based on. It is also the base of the friendly name seen in the dashboard, but will be overriden by the device name set in the Android app.
 
 **volume_step:**  
   *(integer)* *(Optional)* Step size in percent to change volume when calling `volume_up` or `volume_down` service against the media player. Defaults to `5`, can be a number between `1` and `25`. 
@@ -131,17 +138,6 @@ Since v2.0.37 of this component it's also possible to use Home Assistant's [stan
 
 *Tip*: if you experience temporary `Unavailable` status on the slaves afer unjoining from a multiroom group in router mode, run once the Linkplay-specific command `RouterMultiroomEnable` - see details further down.
 
-## Presets
-
-Linkplay devices allow to save, using the control app on the phone/tablet, music presets (for example Spotify playlists) to be recalled for later listening. Recalling a preset from Home Assistant:
-```yaml
-    - service: linkplay.preset
-      data:
-        entity_id: media_player.sound_room1
-        preset: 1
-```
-Preset count vary from device type to type, usually the phone app shows how many presets can be stored maximum. The integration detects the max number and the command only accepts numbers from the allowed range. You can specify multiple entity ids separated by comma or use `all` to run the service against.
-
 ## Snapshot and restore
 
 To prepare the player to play TTS and save the current state of it for restoring afterwards, current playback will stop:
@@ -161,11 +157,18 @@ You can specify multiple entity ids separated by comma or use `all` to run the s
 - Input source
 - Webradio stream (as long as it's configured as an input source)
 - USB audio files playback (track will restart from the beginning)
-- Spotify (snapshot will use the device's highest preset number to store and recall the current playlist, playback may restart the same track or not, depends on Spotify settings. You should manually store a preset first with the app).
+- Spotify (snapshot will use the device's highest preset number to store and recall the current playlist, playback may restart the same track or not, depends on Spotify settings. Note: You have to first manually store at least a preset first with the app).
 
-## Media Browser
+## Presets
 
-For devices with an USB port, make sure that in the sources configuration you have specified a `udisk` entry. Plug in a USB stick with MP3s on it, and switch to that source in Home Assistant (some models switch to USB automatically as soon as you connect a USB drive). The Media Browser will populate with the list of files present on the stick, clicking a file will start playing it.
+Linkplay devices allow to save, using the control app on the phone/tablet, music presets (for example Spotify playlists) to be recalled for later listening. Recalling a preset from Home Assistant:
+```yaml
+    - service: linkplay.preset
+      data:
+        entity_id: media_player.sound_room1
+        preset: 1
+```
+Preset count vary from device type to type, usually the phone app shows how many presets can be stored maximum. The integration detects the max number and the command only accepts numbers from the allowed range. You can specify multiple entity ids separated by comma or use `all` to run the service against.
 
 ## Specific commands
 
@@ -174,7 +177,7 @@ Linkplay devices support some commands through the API, this is a wrapper to be 
     - service: linkplay.command
       data:
         entity_id: media_player.sound_room1
-        command: Reboot
+        command: TimeSync
         notify: False
 ```
 Implemented commands:
@@ -258,54 +261,6 @@ Intrerupt playback of a source, say a TTS message and resume playback afterwards
         entity_id: media_player.sound_room1
 ```
 Note the `delay`, that should be equal or more with the time it takes for the TTS to spkeak out the text, usually that's an average of 1 second for every 3 words spoken out.
-
-Browsing media files through Lovelace UI:
-_This is deprecated, but left here as a reference. Use Media Browser as described above._
-Some device models equipped with an USB port can play music from directly attached USB sticks. There are two services, `linkplay.get_tracks` and `linkplay.play_track` which allow reading the list of the files into an `input_select`, and trigger playback when selecting a file from the list. Here's how to set this up, with the list automatically filling itself when changing to USB.
-Add to `configuration.yaml`:
-```yaml
-input_select:
-  tracks_room1:
-    name: Room1 music list
-    icon: mdi:music
-    options:
-      - "____ Room1 ____"
-    initial: "____ Room1 ____"
-```
-Add to your automations the followings (load the list when changing source to `USB stick`; clear the list when changing to other source; play the selected track):
-```yaml
-- alias: 'Music list load'
-  trigger:
-    platform: template
-    value_template: "{% if is_state_attr('media_player.sound_room1', 'source', 'USB stick') %}True{% endif %}"
-  action:
-    - service: linkplay.get_tracks
-      data:
-        entity_id: media_player.sound_room1
-        input_select: input_select.tracks_room1
-
-- alias: 'Music list clear'
-  trigger:
-    platform: template
-    value_template: "{% if not(is_state_attr('media_player.sound_room1', 'source', 'USB stick')) %}True{% endif %}"
-  action:
-    - service: input_select.set_options
-      data:
-        entity_id: input_select.tracks_room1
-        options:
-          - "____ Room1 ____"
-
-- alias: 'Music list play selected track'
-  trigger:
-    - platform: state
-      entity_id: input_select.tracks_room1
-  action:
-    - service: linkplay.play_track
-      data:
-        entity_id: media_player.sound_room1
-        track: "{{ states('input_select.tracks_room1') }}"
-```
-You can use @mattieha's [Select List Card](https://github.com/mattieha/select-list-card) to display the input_select in Lovelace as scrollable list.
 
 ## About Linkplay
 

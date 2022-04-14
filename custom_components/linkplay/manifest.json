@@ -1,10 +1,10 @@
 {
   "domain": "linkplay",
   "name": "Linkplay",
-  "version":"2.0.44",
+  "version":"3.0.0",
   "documentation": "https://github.com/nagyrobi/home-assistant-custom-components-linkplay",
   "issue_tracker": "https://github.com/nagyrobi/home-assistant-custom-components-linkplay/issues",
-  "after_dependencies": ["http", "media_source", "tts", "ssdp"],
+  "after_dependencies": ["http", "tts", "media_source"],
   "config_flow": false,
   "codeowners": [
     "@nicjo814",
@@ -12,15 +12,8 @@
     "@nagyrobi"
   ],
   "requirements": [
-    "uPnPClient~=0.0",
+    "async-upnp-client>=0.27",
     "validators~=0.12",
     "chardet>=4.0.0"
-  ],
-  "ssdp": [
-    {
-      "st": "upnp:rootdevice",
-      "manufacturer": "wiimu",
-      "device_type": "urn:schemas-upnp-org:device:MediaRenderer:1"
-    }
   ]
 }
