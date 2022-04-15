@@ -2027,7 +2027,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         if value == "OK":
             if self._master is not None:
-                self._master.remove_from_group(self)
+                self._master.async_remove_from_group(self)
                 self._master._wait_for_mcu = 1
                 self._master.schedule_update_ha_state(True)
             self._multiroom_unjoinat = utcnow()
