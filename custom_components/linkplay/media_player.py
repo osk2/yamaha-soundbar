@@ -220,7 +220,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     
     try:
         websession = async_get_clientsession(hass)
-        async with async_timeout.timeout(5):
+        async with async_timeout.timeout(10):
             response = await websession.get(initurl)
 
         if response.status == HTTPStatus.OK:
@@ -369,9 +369,14 @@ class LinkPlayDevice(MediaPlayerEntity):
         """Get the latest data from HTTPAPI service."""
         url = "http://{0}/httpapi.asp?command={1}".format(self._host, cmd)
         
+        if self._first_update:
+            timeout = 10
+        else:
+            timeout = API_TIMEOUT
+        
         try:
             websession = async_get_clientsession(self.hass)
-            async with async_timeout.timeout(API_TIMEOUT):
+            async with async_timeout.timeout(timeout):
                 response = await websession.get(url)
 
         except (asyncio.TimeoutError, aiohttp.ClientError) as error:
