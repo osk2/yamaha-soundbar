@@ -239,7 +239,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     try:
         uuid = data['uuid']
     except KeyError:
-        uuid = host
+        uuid = None
 
     if name == None:
         try:
@@ -448,7 +448,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._player_statdata = resp.copy()
 
     async def async_trigger_schedule_update(self, before):
-        self.schedule_update_ha_state(before)
+        await self.async_schedule_update_ha_state(before)
 
     async def async_update(self):
         """Update state."""
@@ -510,6 +510,13 @@ class LinkPlayDevice(MediaPlayerEntity):
                         self._wifi_channel = device_status['WifiChannel']
                         self._ssid = binascii.hexlify(device_status['ssid'].encode('utf-8'))
                         self._ssid = self._ssid.decode()
+
+                        if self._uuid == None:
+                            try:
+                                self._uuid = device_status['uuid']
+                            except KeyError:
+                                self._uuid = None
+
                         try:
                             self._name = device_status['DeviceName']
                         except KeyError:
@@ -530,7 +537,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                         except KeyError:
                             self._preset_key = 4
 
-                        if self._led_off:
+                        if self._led_off and self._uuid is not None:
                             if self._uuid.find(UUID_ARYLIC) == 0 and self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_RAKOIT_UART_MIN):
                                 value = await self.call_linkplay_tcpuart('MCU+PAS+RAKOIT:LED:0&')
                                 _LOGGER.debug("LED turn off: %s, %s, response: %s", self.entity_id, self._name, value)
@@ -1063,7 +1070,8 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def unique_id(self):
         """Return the unique id."""
-        return "linkplay_media_" + self._uuid
+        if self._uuid is not None:
+            return "linkplay_media_" + self._uuid
 
     @property
     def fw_ver(self):
@@ -1154,7 +1162,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     for slave in self._slave_list:
                         await slave.async_set_state(self._state)
                         await slave.async_set_position_updated_at(self.media_position_updated_at)
-#                #self.schedule_update_ha_state(True)
+#                #await self.async_schedule_update_ha_state(True)
             else:
                 _LOGGER.warning("Failed to pause playback. Device: %s, Got response: %s", self.entity_id, value)
         else:
@@ -1193,7 +1201,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._media_image_url = None
                 self._position_updated_at = utcnow()
                 self._spotify_paused_at = None
-                #self.schedule_update_ha_state(True)
+                #await self.async_schedule_update_ha_state(True)
                 if self._slave_list is not None:
                     for slave in self._slave_list:
                         await slave.async_set_state(self._state)
@@ -1354,7 +1362,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 else:
                     _LOGGER.warning("Failed to select source. Device: %s, Got response: %s", self.entity_id, value)
 
-            #self.schedule_update_ha_state(True)
+            #await self.async_schedule_update_ha_state(True)
         else:
             await self._master.async_select_source(source)
 
@@ -1812,7 +1820,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     async def async_set_slave_mode(self, slave_mode):
         """Set current device as slave in a multiroom configuration."""
         self._slave_mode = slave_mode
-        ##self.schedule_update_ha_state(True)
+        ##await self.async_schedule_update_ha_state(True)
 
     async def async_set_previous_source(self, srcbool):
         """Memorize what was the previous source before entering multiroom."""
@@ -1865,7 +1873,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     async def async_set_source(self, source):
         """Set the source property."""
         self._source = source
-        ##self.schedule_update_ha_state(True)
+        ##await self.async_schedule_update_ha_state(True)
 
     async def async_set_sound_mode(self, mode):
         """Set the sound mode property."""
@@ -1898,7 +1906,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 if int(preset) > 0 and int(preset) <= self._preset_key:
                     value = await self.call_linkplay_httpapi("MCUKeyShortClick:{0}".format(str(preset)), None)
                     # self._wait_for_mcu = 2
-                    # self.schedule_update_ha_state(True)
+                    # await self.async_schedule_update_ha_state(True)
                     if value != "OK":
                         _LOGGER.warning("Failed to recall preset %s. " "Device: %s, Got response: %s", self.entity_id, preset, value)
                 else:
@@ -1973,7 +1981,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 ##                slave.trigger_schedule_update(True)
 
         self._position_updated_at = utcnow()
-        # self.schedule_update_ha_state(True)
+        # await self.async_schedule_update_ha_state(True)
 
     async def async_unjoin_all(self):
         """Disconnect everybody from the multiroom configuration because i'm the master."""
@@ -1996,7 +2004,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                         # await device.async_trigger_schedule_update(True)
             self._multiroom_group = []
             self._position_updated_at = utcnow()
-            # self.schedule_update_ha_state(True)
+            # await self.async_schedule_update_ha_state(True)
 
         else:
             _LOGGER.warning("Failed to unjoin_all multiroom. " "Device: %s, Got response: %s", self.entity_id, value)
@@ -2016,8 +2024,6 @@ class LinkPlayDevice(MediaPlayerEntity):
                 for device in self.hass.data[DOMAIN].entities:
                     if device._is_master:    ## TODO!!!
                         cmd = "multiroom:SlaveKickout:{0}".format(self._slave_ip)
-                        # self._master.lpapi_call('GET', cmd)
-                        # value = self._master.lpapi.data
                         value = await self._master.call_linkplay_httpapi(cmd, None)
                         self._master._position_updated_at = utcnow()
 
@@ -2029,14 +2035,14 @@ class LinkPlayDevice(MediaPlayerEntity):
             if self._master is not None:
                 await self._master.async_remove_from_group(self)
                 self._master._wait_for_mcu = 1
-                self._master.schedule_update_ha_state(True)
+                # await self._master.async_schedule_update_ha_state(True)
             self._multiroom_unjoinat = utcnow()
             self._master = None
             self._is_master = False
             self._slave_mode = False
             self._slave_ip = None
             self._multiroom_group = []
-            # self.schedule_update_ha_state(True)
+            # await self.async_schedule_update_ha_state(True)
 
         else:
             _LOGGER.warning("Failed to unjoin_me from multiroom. " "Device: %s, Got response: %s", self.entity_id, value)
@@ -2045,7 +2051,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         """Remove a certain device for multiroom lists."""
         if device.entity_id in self._multiroom_group:
             self._multiroom_group.remove(device.entity_id)
-#            self.schedule_update_ha_state(True)
+#            await self.async_schedule_update_ha_state(True)
 
         if len(self._multiroom_group) <= 1:
             self._multiroom_group = []
@@ -2077,7 +2083,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             newkey = (''.join(choice(ascii_letters) for i in range(16)))
             value = await self.call_linkplay_httpapi("setNetwork:1:{0}".format(newkey), None)
             if value == 'OK':
-                value = self._lpapi.data + ", key: " + newkey
+                value = value + ", key: " + newkey
             else:
                 value = "key: " + newkey
         elif command.find('SetApSSIDName:') == 0:
@@ -2085,7 +2091,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             if ssidnam != '':
                 value = await self.call_linkplay_httpapi("setSSID:{0}".format(ssidnam), None)
                 if value == 'OK':
-                    value = self._lpapi.data + ", SoftAP SSID set to: " + ssidnam
+                    value = value + ", SoftAP SSID set to: " + ssidnam
             else:
                 value == "SSID not specified correctly. You need 'SetApSSIDName: NewWifiName'"
         elif command.find('WriteDeviceNameToUnit:') == 0:
@@ -2094,21 +2100,21 @@ class LinkPlayDevice(MediaPlayerEntity):
                 value = await self.call_linkplay_httpapi("setDeviceName:{0}".format(devnam), None)
                 if value == 'OK':
                     self._name = devnam
-                    value = self._lpapi.data + ", name set to: " + self._name
+                    value = value + ", name set to: " + self._name
             else:
                 value == "Device name not specified correctly. You need 'WriteDeviceNameToUnit: My Device Name'"
         elif command == 'TimeSync':
             tme = time.strftime('%Y%m%d%H%M%S')
             value = await self.call_linkplay_httpapi("timeSync:{0}".format(tme), None)
             if value == 'OK':
-                value = self._lpapi.data + ", time: " + tme
+                value = value + ", time: " + tme
         elif command == 'Rescan':
             self._unav_throttle = False
             self._first_update = True
-            self.schedule_update_ha_state(True)
+            # await self.async_schedule_update_ha_state(True)
             value = "Scheduled"
         elif command == 'Update':
-            self.schedule_update_ha_state(True)
+            # await self.async_schedule_update_ha_state(True)
             value = "Scheduled"
         else:
             value = "No such command implemented."
@@ -2161,7 +2167,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 await self.call_linkplay_httpapi("setPlayerCmd:stop", None)
         else:
             return
-            #self._master.snapshot(switchinput)
+            #await self._master.async_snapshot(switchinput)
 
 
     async def async_restore(self):
@@ -2185,7 +2191,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 await self.call_linkplay_httpapi("MCUKeyShortClick:{0}".format(str(self._preset_key)), None)
                 # time.sleep(1)
                 self._snapshot_active = False
-                self.schedule_update_ha_state(True)
+                # await self.async_schedule_update_ha_state(True)
 
             elif self._snap_source is not None:
                 self._snapshot_active = False
@@ -2193,7 +2199,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._snap_source = None
         else:
             return
-            #self._master.restore()
+            #await self._master.async_restore()
 
     async def async_play_track(self, track):
         """Play media track by name found in the tracks list."""
@@ -2233,10 +2239,10 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._media_uri_final = None
                 self._ice_skip_throt = False
                 self._unav_throttle = False
-                self.schedule_update_ha_state(True)
+                # await self.async_schedule_update_ha_state(True)
                 return True
         else:
-            self._master.play_track(track)
+            await self._master.async_play_track(track)
 
     async def async_update_via_upnp(self):
         """Update track info via UPNP."""

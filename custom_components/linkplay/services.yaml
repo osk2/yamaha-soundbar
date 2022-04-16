@@ -109,6 +109,7 @@ command:
       selector:
         select:
           options:
+            - Rescan
             - PromptEnable
             - PromptDisable
             - SetRandomWifiKey
