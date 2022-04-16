@@ -118,15 +118,18 @@ MAX_VOL = 100
 FW_MROOM_RTR_MIN = '4.2.8020'
 FW_RAKOIT_UART_MIN = '4.2.9326'
 FW_SLOW_STREAMS = '4.6'
-UPNP_TIMEOUT = 2
+ROOTDIR_USB = '/media/sda1/'
+UUID_ARYLIC = 'FF31F09E'
 TCPPORT = 8899
+UPNP_TIMEOUT = 2
+API_TIMEOUT = 2
+SCAN_INTERVAL = timedelta(seconds=3)
 ICE_THROTTLE = timedelta(seconds=60)
-UNA_THROTTLE = timedelta(seconds=120)
+UNA_THROTTLE = timedelta(seconds=60)
 MROOM_UJWDIR = timedelta(seconds=20)
 MROOM_UJWROU = timedelta(seconds=3)
 SPOTIFY_PAUSED_TIMEOUT = timedelta(seconds=300)
-ROOTDIR_USB = '/media/sda1/'
-UUID_ARYLIC = 'FF31F09E'
+#PARALLEL_UPDATES = 0
 
 SOUND_MODES = {'0': 'Normal', '1': 'Classic', '2': 'Pop', '3': 'Jazz', '4': 'Vocal'}
 
@@ -173,10 +176,6 @@ SOURCES_LIVEIN = ['-1', '0', '40', '41', '43', '44', '45', '46', '47', '48', '49
 SOURCES_STREAM = ['1', '2', '3', '10', '30']
 SOURCES_LOCALF = ['11', '16', '20', '21', '52', '60']
 
-TIMEOUT = 2
-SCAN_INTERVAL = timedelta(seconds=3)
-#PARALLEL_UPDATES = 0
-
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_HOST): cv.string,
@@ -221,7 +220,9 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     
     try:
         websession = async_get_clientsession(hass)
-        response = await websession.get(initurl)
+        async with async_timeout.timeout(5):
+            response = await websession.get(initurl)
+
         if response.status == HTTPStatus.OK:
             data = await response.json(content_type=None)
             _LOGGER.debug("HOST: %s DATA response: %s", host, data)
@@ -370,28 +371,31 @@ class LinkPlayDevice(MediaPlayerEntity):
         
         try:
             websession = async_get_clientsession(self.hass)
-            response = await websession.get(url)
-            if response.status == HTTPStatus.OK:
-                if jsn:
-                    data = await response.json(content_type=None)
-                else:
-                    data = await response.text()
-                    _LOGGER.debug("For %s  cmd: %s  resp: %s", self._name, cmd, data)
-            else:
-                _LOGGER.error(
-                    "For %s (%s) Get failed, response code: %s Full message: %s",
-                    self._name,
-                    self._host,
-                    response.status,
-                    response,
-                )
-                return False
+            async with async_timeout.timeout(API_TIMEOUT):
+                response = await websession.get(url)
 
         except (asyncio.TimeoutError, aiohttp.ClientError) as error:
             _LOGGER.warning(
                 "Failed communicating with LinkPlayDevice '%s': %s", self._name, type(error)
             )
             return False
+
+        if response.status == HTTPStatus.OK:
+            if jsn:
+                data = await response.json(content_type=None)
+            else:
+                data = await response.text()
+                _LOGGER.debug("For %s  cmd: %s  resp: %s", self._name, cmd, data)
+        else:
+            _LOGGER.error(
+                "For %s (%s) Get failed, response code: %s Full message: %s",
+                self._name,
+                self._host,
+                response.status,
+                response,
+            )
+            return False
+
         return data
 
     async def call_linkplay_tcpuart(self, cmd):
@@ -404,7 +408,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         _LOGGER.debug("For %s Sending to %s TCP UART command: %s", self._name, self._host, cmd)
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(5)
+                s.settimeout(API_TIMEOUT)
                 s.connect((self._host, TCPPORT))
                 s.send(bytes.fromhex(HED1 + LENC + HED2 + CMHX))
                 data = str(repr(s.recv(1024))).encode().decode("unicode-escape")
