@@ -14,7 +14,6 @@ from json import loads, dumps
 import binascii
 import urllib.request
 import string
-#import time
 import aiohttp
 from http import HTTPStatus
 from aiohttp.client_exceptions import ClientError
@@ -96,6 +95,7 @@ ATTR_TRCNT = 'tracks_local'
 ATTR_TRCRT = 'track_current'
 ATTR_DEBUG = 'debug_info'
 ATTR_STURI = 'stream_uri'
+ATTR_UUID = 'uuid'
 
 CONF_NAME = 'name'
 CONF_LASTFM_API_KEY = 'lastfm_api_key'
@@ -105,8 +105,8 @@ CONF_ICECAST_METADATA = 'icecast_metadata'
 CONF_MULTIROOM_WIFIDIRECT = 'multiroom_wifidirect'
 CONF_VOLUME_STEP = 'volume_step'
 CONF_LEDOFF = 'led_off'
+CONF_UUID = 'uuid'
 
-DEFAULT_NAME = 'Speaker'
 DEFAULT_ICECAST_UPDATE = 'StationName'
 DEFAULT_MULTIROOM_WIFIDIRECT = False
 DEFAULT_LEDOFF = False
@@ -173,20 +173,21 @@ SOURCES_LIVEIN = ['-1', '0', '40', '41', '43', '44', '45', '46', '47', '48', '49
 SOURCES_STREAM = ['1', '2', '3', '10', '30']
 SOURCES_LOCALF = ['11', '16', '20', '21', '52', '60']
 
-TIMEOUT = 10
+TIMEOUT = 2
 SCAN_INTERVAL = timedelta(seconds=3)
 #PARALLEL_UPDATES = 0
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_HOST): cv.string,
-        vol.Optional(CONF_NAME, default=None): cv.string,
+        vol.Required(CONF_NAME): cv.string,
         vol.Optional(CONF_ICECAST_METADATA, default=DEFAULT_ICECAST_UPDATE): vol.In(['Off', 'StationName', 'StationNameSongTitle']),
         vol.Optional(CONF_MULTIROOM_WIFIDIRECT, default=DEFAULT_MULTIROOM_WIFIDIRECT): cv.boolean,
         vol.Optional(CONF_LEDOFF, default=DEFAULT_LEDOFF): cv.boolean,
         vol.Optional(CONF_SOURCES): cv.ensure_list,
         vol.Optional(CONF_COMMONSOURCES): cv.ensure_list,
         vol.Optional(CONF_LASTFM_API_KEY): cv.string,
+        vol.Optional(CONF_UUID, default=''): cv.string,
         vol.Optional(CONF_VOLUME_STEP, default=DEFAULT_VOLUME_STEP): vol.All(int, vol.Range(min=1, max=25)),
     }
 )
@@ -212,6 +213,9 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     led_off = config.get(CONF_LEDOFF)
     volume_step = config.get(CONF_VOLUME_STEP)
     lastfm_api_key = config.get(CONF_LASTFM_API_KEY)
+    uuid = config.get(CONF_UUID)
+
+    state = STATE_IDLE
 
     initurl = "http://{0}/httpapi.asp?command=getStatus".format(host)
     
@@ -221,31 +225,31 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         if response.status == HTTPStatus.OK:
             data = await response.json(content_type=None)
             _LOGGER.debug("HOST: %s DATA response: %s", host, data)
+
+            try:
+                uuid = data['uuid']
+            except KeyError:
+                pass
+
+            if name == None:
+                try:
+                    name = data['DeviceName']
+                except KeyError:
+                    pass
+
         else:
-            _LOGGER.error(
+            _LOGGER.warning(
                 "Get Status UUID failed, response code: %s Full message: %s",
                 response.status,
                 response,
             )
-            return
+            state = STATE_UNAVAILABLE
 
     except (asyncio.TimeoutError, aiohttp.ClientError) as error:
-        _LOGGER.error(
-            "Get Status UUID failed for '%s': %s", host, type(error)
+        _LOGGER.warning(
+            "Failed communicating with LinkPlayDevice at start '%s': uuid: %s %s", host, uuid, type(error)
         )
-        return
-
-
-    try:
-        uuid = data['uuid']
-    except KeyError:
-        uuid = None
-
-    if name == None:
-        try:
-            name = data['DeviceName']
-        except KeyError:
-            name = DEFAULT_NAME
+        state = STATE_UNAVAILABLE
 
     linkplay = LinkPlayDevice(name, 
                             host, 
@@ -257,6 +261,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
                             volume_step,
                             lastfm_api_key,
                             uuid,
+                            state,
                             hass)
 
     async_add_entities([linkplay])
@@ -275,6 +280,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                  volume_step,
                  lastfm_api_key,
                  uuid,
+                 state,
                  hass):
         """Initialize the media player."""
         self._uuid = uuid
@@ -289,7 +295,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._name = name
         self._host = host
         self._icon = ICON_DEFAULT
-        self._state = STATE_UNAVAILABLE
+        self._state = state
         self._volume = 0
         self._volume_step = volume_step
         self._led_off = led_off
@@ -382,7 +388,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 return False
 
         except (asyncio.TimeoutError, aiohttp.ClientError) as error:
-            _LOGGER.error(
+            _LOGGER.warning(
                 "Failed communicating with LinkPlayDevice '%s': %s", self._name, type(error)
             )
             return False
@@ -425,9 +431,9 @@ class LinkPlayDevice(MediaPlayerEntity):
         resp = await self.call_linkplay_httpapi("getPlayerStatus", True)
         if resp is False:
             _LOGGER.debug('Unable to connect to device: %s, %s', self.entity_id, self._name)
+            self._state = STATE_UNAVAILABLE
             self._unav_throttle = True
             self._wait_for_mcu = 0
-            self._state = STATE_UNAVAILABLE
             self._playhead_position = None
             self._duration = None
             self._position_updated_at = None
@@ -511,11 +517,10 @@ class LinkPlayDevice(MediaPlayerEntity):
                         self._ssid = binascii.hexlify(device_status['ssid'].encode('utf-8'))
                         self._ssid = self._ssid.decode()
 
-                        if self._uuid == None:
-                            try:
-                                self._uuid = device_status['uuid']
-                            except KeyError:
-                                self._uuid = None
+                        try:
+                            self._uuid = device_status['uuid']
+                        except KeyError:
+                            pass
 
                         try:
                             self._name = device_status['DeviceName']
@@ -537,7 +542,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                         except KeyError:
                             self._preset_key = 4
 
-                        if self._led_off and self._uuid is not None:
+                        if self._led_off and self._uuid != '':
                             if self._uuid.find(UUID_ARYLIC) == 0 and self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_RAKOIT_UART_MIN):
                                 value = await self.call_linkplay_tcpuart('MCU+PAS+RAKOIT:LED:0&')
                                 _LOGGER.debug("LED turn off: %s, %s, response: %s", self.entity_id, self._name, value)
@@ -589,6 +594,9 @@ class LinkPlayDevice(MediaPlayerEntity):
                 'play': STATE_PLAYING,
                 'pause': STATE_PAUSED,
             }.get(self._player_statdata['status'], STATE_IDLE)
+
+            if bool(self._player_statdata['mode'] == '99'):
+                self._state = STATE_IDLE
 
             if self._state in [STATE_PLAYING, STATE_PAUSED]:
                 self._duration = int(int(self._player_statdata['totlen']) / 1000)
@@ -1025,7 +1033,8 @@ class LinkPlayDevice(MediaPlayerEntity):
             attributes[ATTR_TRCNT] = len(self._trackq) - 1
         if self._trackc:
             attributes[ATTR_TRCRT] = self._trackc
-
+        if self._uuid != '':
+            attributes[ATTR_UUID] = self._uuid
 
         if DEBUGSTR_ATTR:
             atrdbg = ""
@@ -1070,7 +1079,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def unique_id(self):
         """Return the unique id."""
-        if self._uuid is not None:
+        if self._uuid != '':
             return "linkplay_media_" + self._uuid
 
     @property
@@ -2104,6 +2113,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             else:
                 value == "Device name not specified correctly. You need 'WriteDeviceNameToUnit: My Device Name'"
         elif command == 'TimeSync':
+            import time
             tme = time.strftime('%Y%m%d%H%M%S')
             value = await self.call_linkplay_httpapi("timeSync:{0}".format(tme), None)
             if value == 'OK':
@@ -2112,10 +2122,10 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._unav_throttle = False
             self._first_update = True
             # await self.async_schedule_update_ha_state(True)
-            value = "Scheduled"
+            value = "Scheduled to Rescan"
         elif command == 'Update':
             # await self.async_schedule_update_ha_state(True)
-            value = "Scheduled"
+            value = "Scheduled to Update"
         else:
             value = "No such command implemented."
             _LOGGER.warning("Player %s command: %s, result: %s", self.entity_id, command, value)

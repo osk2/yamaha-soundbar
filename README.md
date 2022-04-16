@@ -58,7 +58,7 @@ media_player:
   *(string)* *(Required)* The IP address of the Linkplay unit.
 
 **name:**  
-  *(string)* *(Optional)* Name that Home Assistant will generate the `entity_id` based on. It is also the base of the friendly name seen in the dashboard, but will be overriden by the device name set in the Android app.
+  *(string)* *(Required)* Name that Home Assistant will generate the `entity_id` based on. It is also the base of the friendly name seen in the dashboard, but will be overriden by the device name set in the Android app.
 
 **volume_step:**  
   *(integer)* *(Optional)* Step size in percent to change volume when calling `volume_up` or `volume_down` service against the media player. Defaults to `5`, can be a number between `1` and `25`. 
@@ -106,6 +106,9 @@ _Note:_ **Don't** use HTTP**S** streams. Linkplay chipsets seem to have limited 
 
 **multiroom_wifidirect:**  
   *(boolean)* *(Optional)* Set to `True` to override the default router mode used by the component with wifi-direct connection mode (more details below).
+
+**uuid:**  
+  *(string)* *(Optional)* Hardware UUID of the player. If not specified, can be read from the attibutes of the player. Set it manually to that value to handle cases when Home Assistant starts up without the Linkplay device being available.
 
 **led_off:**  
   *(boolean)* *(Optional)* Set to `True` to turn off the LED on the front panel of the Arylic devices (works only for this brand).
