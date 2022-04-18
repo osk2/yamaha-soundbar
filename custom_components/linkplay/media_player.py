@@ -125,7 +125,7 @@ UPNP_TIMEOUT = 2
 API_TIMEOUT = 2
 SCAN_INTERVAL = timedelta(seconds=3)
 ICE_THROTTLE = timedelta(seconds=60)
-UNA_THROTTLE = timedelta(seconds=60)
+UNA_THROTTLE = timedelta(seconds=20)
 MROOM_UJWDIR = timedelta(seconds=20)
 MROOM_UJWROU = timedelta(seconds=3)
 SPOTIFY_PAUSED_TIMEOUT = timedelta(seconds=300)
@@ -1995,8 +1995,8 @@ class LinkPlayDevice(MediaPlayerEntity):
         for slave in slaves:
             if slave.entity_id in self._multiroom_group:
                 await slave.async_set_multiroom_group(self._multiroom_group)
-##                slave.set_position_updated_at(utcnow())
-##                slave.trigger_schedule_update(True)
+##                await slave.async_set_position_updated_at(utcnow())
+##                await slave.async_trigger_schedule_update(True)
 
         self._position_updated_at = utcnow()
         # await self.async_schedule_update_ha_state(True)
@@ -2080,8 +2080,8 @@ class LinkPlayDevice(MediaPlayerEntity):
             for player in self.hass.data[DOMAIN].entities:
                 if player.entity_id == member and player.entity_id != self.entity_id:
                     await player.async_set_multiroom_group(self._multiroom_group)
-#                    player.trigger_schedule_update(True)
-#                    player.set_position_updated_at(utcnow())
+#                    await player.async_trigger_schedule_update(True)
+#                    await player.async_set_position_updated_at(utcnow())
 
     async def async_execute_command(self, command, notif):
         """Execute desired command against the player using factory API."""
@@ -2372,7 +2372,6 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._service = self._upnp_device.service('urn:schemas-wiimu-com:service:PlayQueue:1')
         #_LOGGER.debug("PlayQueue for: %s, UPNP service:%s", self.entity_id, self._service)
 
-
         try:
             media_info = await self._service.action("SetSpotifyPreset").async_call(KeyIndex=int(presetnum))
             _LOGGER.debug("PlayQueue/SetSpotifyPreset for: %s, UPNP media_info:%s", self.entity_id, media_info)
@@ -2392,17 +2391,20 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         xml_tree = ET.fromstring(preset_map)
         
-        if xml_tree.find('Key'+presetnum+'/Name') is None:
-            _LOGGER.error("Preset Map error: %s num: %s. Please create a Spotify preset first with the mobile app for this player.", self.entity_id, presetnum)
-            self.hass.components.persistent_notification.async_create("<b>Preset Map error:</b><br>Please create a Spotify preset first with the mobile app for this player", title=self.entity_id)
+        if xml_tree.find('Key'+presetnum) is None:
+            _LOGGER.error("Preset Map error: %s num: %s. Please create a Spotify preset first with the mobile app for this player. Tree: %s", self.entity_id, presetnum, preset_map)
+            self.hass.components.persistent_notification.async_create("<b>Preset Map error:</b><br><br><br>This player can't store presets yet!<br>Please create a preset first manually with the mobile app for this player and then try again.", title=self.entity_id)
             return
 
+        import time
+        tme = time.strftime('%Y-%m-%d %H:%M:%S')
+
         try:
-            xml_tree.find('Key'+presetnum+'/Name').text = "Snapshot set by Home Assistant ("+result+")_#~" + str(utcnow())
+            xml_tree.find('Key'+presetnum+'/Name').text = "Snapshot set by Home Assistant ("+result+")_#~" + tme
         except:
             data=xml_tree.find('Key'+presetnum)
             snap=ET.SubElement(data,'Name')
-            snap.text = "Snapshot set by Home Assistant ("+result+")_#~" + str(utcnow())
+            snap.text = "Snapshot set by Home Assistant ("+result+")_#~" + tme
 
         try:
             xml_tree.find('Key'+presetnum+'/Source').text = "SPOTIFY"
