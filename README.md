@@ -47,10 +47,10 @@ media_player:
     - platform: linkplay
       host: 192.168.1.12
       name: Sound Room2
+      uuid: 'FF31F09E82A6BBC1A2CB6D80'
       icecast_metadata: 'Off'  # valid values: 'Off', 'StationName', 'StationNameSongTitle'
       sources: {}
       common_sources: !include linkplay-radio-sources.yaml
-      uuid: 'FF31F09E82A6BBC1A2CB6D80'
 ```
 
 ### Configuration Variables
