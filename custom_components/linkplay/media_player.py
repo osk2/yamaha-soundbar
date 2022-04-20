@@ -1279,7 +1279,25 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._playing_mediabrowser = True
 
                 media_id = play_item.url
-                if not play_item.mime_type in ['audio/mpeg', 'audio/aac', 'application/ogg', 'audio/mp4', 'audio/x-aiff', 'audio/x-mpegurl', 'audio/ogg', 'audio/vorbis', 'audio/opus', 'audio/vnd.wav', 'audio/x-wav', 'audio/x-flac', 'audio/x-ms-wma']:
+                if not play_item.mime_type in ['audio/basic',
+                                               'audio/mpeg', 
+                                               'audio/mp3', 
+                                               'audio/mpeg3', 
+                                               'audio/x-mpeg-3',
+                                               'audio/mp4', 
+                                               'audio/aac', 
+                                               'audio/x-aac',
+                                               'audio/x-hx-aac-adts', 
+                                               'audio/x-aiff', 
+                                               'audio/x-mpegurl', 
+                                               'audio/ogg', 
+                                               'audio/vorbis', 
+                                               'application/ogg', 
+                                               'audio/opus', 
+                                               'audio/vnd.wav', 
+                                               'audio/x-wav', 
+                                               'audio/x-flac', 
+                                               'audio/x-ms-wma']:
                     _LOGGER.warning("For %s Invalid media type, %s is not supported", self._name, play_item.mime_type)
                     self._playing_mediabrowser = False
                     return False
