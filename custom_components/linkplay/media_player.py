@@ -248,7 +248,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
     except (asyncio.TimeoutError, aiohttp.ClientError) as error:
         _LOGGER.warning(
-            "Failed communicating with LinkPlayDevice at start '%s': uuid: %s %s", host, uuid, type(error)
+            "Failed communicating with LinkPlayDevice (start) '%s': uuid: %s %s", host, uuid, type(error)
         )
         state = STATE_UNAVAILABLE
 
@@ -381,7 +381,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         except (asyncio.TimeoutError, aiohttp.ClientError) as error:
             _LOGGER.warning(
-                "Failed communicating with LinkPlayDevice '%s': %s", self._name, type(error)
+                "Failed communicating with LinkPlayDevice (httpapi) '%s': %s", self._name, type(error)
             )
             return False
 
@@ -562,7 +562,12 @@ class LinkPlayDevice(MediaPlayerEntity):
 
                         if self._upnp_device is None: # and self._name is not None:
                             url = "http://{0}:49152/description.xml".format(self._host)
-                            self._upnp_device = await self._factory.async_create_device(url)
+                            try:
+                                self._upnp_device = await self._factory.async_create_device(url)
+                            except:
+                                _LOGGER.warning(
+                                    "Failed communicating with LinkPlayDevice (UPnP) '%s': %s", self._name, type(error)
+                                )
 
                         if self._first_update:
                             self._duration = 0
