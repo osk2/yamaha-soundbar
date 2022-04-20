@@ -50,6 +50,7 @@ media_player:
       icecast_metadata: 'Off'  # valid values: 'Off', 'StationName', 'StationNameSongTitle'
       sources: {}
       common_sources: !include linkplay-radio-sources.yaml
+      uuid: 'FF31F09E82A6BBC1A2CB6D80'
 ```
 
 ### Configuration Variables
@@ -108,7 +109,7 @@ _Note:_ **Don't** use HTTP**S** streams. Linkplay chipsets seem to have limited 
   *(boolean)* *(Optional)* Set to `True` to override the default router mode used by the component with wifi-direct connection mode (more details below).
 
 **uuid:**  
-  *(string)* *(Optional)* Hardware UUID of the player. If not specified, can be read from the attibutes of the player. Set it manually to that value to handle cases when Home Assistant starts up without the Linkplay device being available.
+  *(string)* *(Optional)* Hardware UUID of the player. Can be read out from the attibutes of the entity. Set it manually to that value to handle double-added entity cases when Home Assistant starts up without the Linkplay device being on the network at that moment.
 
 **led_off:**  
   *(boolean)* *(Optional)* Set to `True` to turn off the LED on the front panel of the Arylic devices (works only for this brand).
