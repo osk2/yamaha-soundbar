@@ -2362,10 +2362,10 @@ class LinkPlayDevice(MediaPlayerEntity):
 
 
     async def async_restore(self):
+        """Restore the current input source and the volume level of it """
         if self._state == STATE_UNAVAILABLE:
             return
 
-        """Restore the current input source and the volume level of it """
         if not self._slave_mode:
             _LOGGER.warning("Player %s current source: %s, restoring volume: %s, and source to: %s", self.entity_id, self._source, self._snap_volume, self._snap_source)
             if self._snap_state != STATE_UNKNOWN:
@@ -2379,12 +2379,14 @@ class LinkPlayDevice(MediaPlayerEntity):
 
             if self._snap_spotify:
                 self._snap_spotify = False
+                self._playing_tts = False
                 await self.call_linkplay_httpapi("MCUKeyShortClick:{0}".format(str(self._preset_key)), None)
                 # await asyncio.sleep(1)
                 self._snapshot_active = False
                 # await self.async_schedule_update_ha_state(True)
 
             elif self._snap_source is not None:
+                self._playing_tts = False
                 self._snapshot_active = False
                 await self.async_select_source(self._snap_source)
                 self._snap_source = None
