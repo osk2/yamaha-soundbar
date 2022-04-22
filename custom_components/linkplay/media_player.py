@@ -97,6 +97,7 @@ ICON_MUTED = 'mdi:speaker-off'
 ICON_MULTIROOM = 'mdi:speaker-multiple'
 ICON_BLUETOOTH = 'mdi:speaker-bluetooth'
 ICON_PUSHSTREAM = 'mdi:cast-audio'
+ICON_TTS = 'mdi:text-to-speech'
 
 ATTR_SLAVE = 'slave'
 ATTR_LINKPLAY_GROUP = 'linkplay_group'
@@ -515,7 +516,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._playhead_position = 0
                 self._duration = 0
                 self._position_updated_at = utcnow()
-                self._idletime_updated_at = utcnow()
+                self._idletime_updated_at = self._position_updated_at
 #                await self.async_restore_previous_source()
                 await self.async_select_source(self._multiroom_prevsrc)
                 self._multiroom_prevsrc = None
@@ -869,6 +870,10 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def icon(self):
         """Return the icon of the device."""
+
+        if self._playing_tts:
+            return ICON_TTS
+
         if self._state in [STATE_PAUSED, STATE_UNAVAILABLE, STATE_IDLE, STATE_UNKNOWN]:
             return ICON_DEFAULT
 
@@ -1007,10 +1012,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def media_title(self):
         """Return title of the current track."""
-        if self._playing_tts:
-            return "TTS"
-        else:
-            return self._media_title
+        return self._media_title
 
     @property
     def media_artist(self):
@@ -1194,7 +1196,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._unav_throttle = False
                 #self._playing_tts = False
                 self._position_updated_at = utcnow()
-                self._idletime_updated_at = utcnow()
+                self._idletime_updated_at = self._position_updated_at
                 if self._slave_list is not None:
                     for slave in self._slave_list:
                         await slave.async_set_state(self._state)
@@ -1216,7 +1218,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             value = await self.call_linkplay_httpapi("setPlayerCmd:pause", None)
             if value == "OK":
                 self._position_updated_at = utcnow()
-                self._idletime_updated_at = utcnow()
+                self._idletime_updated_at = self._position_updated_at
                 if self._playing_spotify:
                     self._spotify_paused_at = utcnow()
                 self._state = STATE_PAUSED
@@ -1266,7 +1268,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._trackc = None
                 self._media_image_url = None
                 self._position_updated_at = utcnow()
-                self._idletime_updated_at = utcnow()
+                self._idletime_updated_at = self._position_updated_at
                 self._spotify_paused_at = None
                 #await self.async_schedule_update_ha_state(True)
                 if self._slave_list is not None:
@@ -1284,7 +1286,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             if self._duration > 0 and position >= 0 and position <= self._duration:
                 value = await self.call_linkplay_httpapi("setPlayerCmd:seek:{0}".format(str(position)), None)
                 self._position_updated_at = utcnow()
-                self._idletime_updated_at = utcnow()
+                self._idletime_updated_at = self._position_updated_at
                 self._wait_for_mcu = 0.2
                 if value != "OK":
                     _LOGGER.warning("Failed to seek. Device: %s, Got response: %s", self.entity_id, value)
@@ -1364,7 +1366,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 else:
                     media_id_final = await self.async_detect_stream_url_redirection(media_id)
 
-                if self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_SLOW_STREAMS):
+                if self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_SLOW_STREAMS) and self._state == STATE_PLAYING:
                     await self.call_linkplay_httpapi("setPlayerCmd:pause", None)
                 
                 if self._playing_spotify:  # disconnect from Spotify before playing new http source
@@ -1397,7 +1399,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._duration = 0
             self._trackc = None
             self._position_updated_at = utcnow()
-            self._idletime_updated_at = utcnow()
+            self._idletime_updated_at = self._position_updated_at
             self._media_image_url = None
             self._ice_skip_throt = True
             self._unav_throttle = False
@@ -1440,7 +1442,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             if temp_source.startswith('http'):
                 temp_source_final = await self.async_detect_stream_url_redirection(temp_source)
 
-                if self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_SLOW_STREAMS):
+                if self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_SLOW_STREAMS) and self._state == STATE_PLAYING:
                     await self.call_linkplay_httpapi("setPlayerCmd:pause", None)  #recent firmwares don't stop the previous stream while loading the new one, can take several seconds
 
                 value = await self.call_linkplay_httpapi("setPlayerCmd:play:{0}".format(temp_source_final), None)
@@ -1458,7 +1460,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._duration = 0
                     self._trackc = None
                     self._position_updated_at = utcnow()
-                    self._idletime_updated_at = utcnow()
+                    self._idletime_updated_at = self._position_updated_at
                     self._media_title = None
                     self._media_artist = None
                     self._media_album = None
@@ -1485,7 +1487,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._duration = 0
                     self._trackc = None
                     self._position_updated_at = utcnow()
-                    self._idletime_updated_at = utcnow()
+                    self._idletime_updated_at = self._position_updated_at
                     if self._slave_list is not None:
                         for slave in self._slave_list:
                             await slave.async_set_source(source)
