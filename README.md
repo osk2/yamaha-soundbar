@@ -200,6 +200,47 @@ If parameter `notify: False` is omitted, results will appear in Lovelace UI's le
 
 ## Automation examples
 
+Intrerupt playback of a source, incrase volume by 15%, say a TTS message and resume playback when TTS finishes:
+```yaml
+- alias: 'Notify by TTS that Hanna has arrived Sound Room 1'
+  id: tts_mary_home_sound_room1
+  trigger:
+    - platform: state
+      entity_id: person.mary
+      to: 'home'
+  action:
+    - service: linkplay.snapshot
+      data:
+        entity_id: media_player.sound_room1
+    - service: media_player.volume_set
+      data:
+        entity_id: media_player.sound_room1
+        volume_level: "{{ state_attr('media_player.sound_room1', 'volume_level') | float + 0.15 }}"
+    - service: tts.google_translate_say
+      data:
+        entity_id: media_player.sound_room1
+        language: en
+        message: "Hanna has arrived home."
+
+- alias: 'Restore state after TTS for snapshotted Sound Room 1'
+  id: tts_restore_sound_room1
+  trigger:
+    - platform: state
+      entity_id: media_player.sound_room1
+      attribute: tts_active
+      to: false
+  condition:
+    - condition: state
+      entity_id: media_player.sound_room1
+      attribute: snapshot_active
+      state: true
+  action:
+    - service: linkplay.restore
+      data:
+        entity_id: media_player.sound_room1
+```
+No need for any delays in the automations. Trigger on attribute `tts_active` goes _false_ when the player finishes playing the TTS stream, and if `snapshot_active` is _true_ means that snapshot exists and can be restored.
+
 Play a sound file located on an http server or a webradio stream:
 ```yaml
     - service: media_player.play_media
@@ -241,31 +282,6 @@ Select an input and set volume and unmute via an automation:
 ```
 Note that you have to specify source names as you've set them in the configuration of the component.
 
-Intrerupt playback of a source, say a TTS message and resume playback afterwards:
-```yaml
-- alias: 'Notify by TTS that Mary has arrived'
-  trigger:
-    - platform: state
-      entity_id: person.mary
-      to: 'home'
-  action:
-    - service: linkplay.snapshot
-      data:
-        entity_id: media_player.sound_room1
-    - service: media_player.volume_set
-      data:
-        entity_id: media_player.hang_nappali
-        volume_level: 0.8
-    - service: tts.google_translate_say
-      data:
-        entity_id: media_player.sound_room1
-        message: 'Mary arrived home'
-    - delay: '00:00:02'
-    - service: linkplay.restore
-      data:
-        entity_id: media_player.sound_room1
-```
-Note the `delay`, that should be equal or more with the time it takes for the TTS to spkeak out the text, usually that's an average of 1 second for every 3 words spoken out.
 
 ## About Linkplay
 

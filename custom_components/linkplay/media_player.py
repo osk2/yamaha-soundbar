@@ -104,9 +104,11 @@ ATTR_LINKPLAY_GROUP = 'linkplay_group'
 ATTR_FWVER = 'firmware'
 ATTR_TRCNT = 'tracks_local'
 ATTR_TRCRT = 'track_current'
-ATTR_DEBUG = 'debug_info'
 ATTR_STURI = 'stream_uri'
 ATTR_UUID = 'uuid'
+ATTR_TTS = 'tts_active'
+ATTR_SNAPSHOT = 'snapshot_active'
+ATTR_DEBUG = 'debug_info'
 
 CONF_NAME = 'name'
 CONF_LASTFM_API_KEY = 'lastfm_api_key'
@@ -141,7 +143,7 @@ UNA_THROTTLE = timedelta(seconds=20)
 MROOM_UJWDIR = timedelta(seconds=20)
 MROOM_UJWROU = timedelta(seconds=3)
 SPOTIFY_PAUSED_TIMEOUT = timedelta(seconds=300)
-AUTOIDLE_STATE_TIMEOUT = timedelta(seconds=3)
+AUTOIDLE_STATE_TIMEOUT = timedelta(seconds=1)
 #PARALLEL_UPDATES = 0
 
 CUT_EXTENSIONS = ['mp3', 'mp2', 'm2a', 'mpg', 'wav', 'aac', 'flac', 'flc', 'm4a', 'ape', 'wma', 'ac3', 'ogg']
@@ -492,7 +494,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         if self._master is None:
             self._slave_mode = False
 
-        if self._slave_mode or self._snapshot_active:
+        if self._slave_mode: # or self._snapshot_active:
             return True
 
         if self._multiroom_unjoinat is not None:
@@ -1088,6 +1090,9 @@ class LinkPlayDevice(MediaPlayerEntity):
         if self._uuid != '':
             attributes[ATTR_UUID] = self._uuid
 
+        attributes[ATTR_TTS] = self._playing_tts
+        attributes[ATTR_SNAPSHOT] = self._snapshot_active
+
         if DEBUGSTR_ATTR:
             atrdbg = ""
             if self._playing_localfile:
@@ -1633,6 +1638,8 @@ class LinkPlayDevice(MediaPlayerEntity):
             if self._is_master:
                 value = await self.call_linkplay_httpapi("setPlayerCmd:slave_vol:{0}".format(str(volume)), None)
             else:
+                if self._snapshot_active:
+                    await asyncio.sleep(0.6)
                 value = await self.call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
 
             if value == "OK":
@@ -2357,6 +2364,8 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._snap_volume = 0
             else:
                 self._snap_volume = int(self._volume)
+                if self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_SLOW_STREAMS):
+                    await self.call_linkplay_httpapi("setPlayerCmd:pause", None)
                 await self.call_linkplay_httpapi("setPlayerCmd:stop", None)
         else:
             return
