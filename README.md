@@ -163,6 +163,8 @@ You can specify multiple entity ids separated by comma or use `all` to run the s
 - USB audio files playback (track will restart from the beginning)
 - Spotify (snapshot will use the device's highest preset number to store and recall the current playlist, playback may restart the same track or not, depends on Spotify settings. Note: You have to first manually store at least a preset first with the app).
 
+If you experience TTS audio being cut off at the beginning, this is because the player needs some time to switch to playing out the stream. The only good solution for this is to add a configurable amount of silence at the beginning of the audio stream, I've modified [Google Translate](https://github.com/nagyrobi/home-assistant-custom-components-google_translate) and [VoiceRSS](https://github.com/nagyrobi/home-assistant-custom-components-voicerss) to do this, they can be installed manually as custom components.
+
 ## Presets
 
 Linkplay devices allow to save, using the control app on the phone/tablet, music presets (for example Spotify playlists) to be recalled for later listening. Recalling a preset from Home Assistant:
