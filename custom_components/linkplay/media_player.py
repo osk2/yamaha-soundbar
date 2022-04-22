@@ -377,9 +377,13 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._ice_skip_throt = False
         self._snapshot_active = False
         self._snap_source = None
+        self._snap_uri = None
         self._snap_state = STATE_UNKNOWN
         self._snap_volume = 0
         self._snap_spotify = False
+        self._snap_nometa = False
+        self._snap_playing_mediabrowser = False
+        self._snap_media_source_uri = None
         
     async def async_added_to_hass(self):
         """Record entity."""
@@ -540,7 +544,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         if isinstance(self._player_statdata, dict):
             self._unav_throttle = False
             if self._first_update or (self._state == STATE_UNAVAILABLE or self._multiroom_wifidirect):
-                _LOGGER.debug("03 Update getStatus %s, %s", self.entity_id, self._name)
+                #_LOGGER.debug("03 Update first time getStatus %s, %s", self.entity_id, self._name)
                 device_status = await self.call_linkplay_httpapi("getStatus", True)
                 if device_status is not None:
                     if isinstance(device_status, dict):
@@ -1312,8 +1316,10 @@ class LinkPlayDevice(MediaPlayerEntity):
                 await self.async_media_stop()
                 return False
             
-            self._playing_mediabrowser = False
-            self._nometa = False
+            if not self._snapshot_active:
+                self._playing_mediabrowser = False
+                self._nometa = False
+
             if media_source.is_media_source_id(media_id):
                 play_item = await media_source.async_resolve_media(self.hass, media_id)
                 if media_id.find('radio_browser') != -1:  # radios are an exception, be treated by server redirect checker and icecast metadata parser
@@ -1639,7 +1645,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 value = await self.call_linkplay_httpapi("setPlayerCmd:slave_vol:{0}".format(str(volume)), None)
             else:
                 if self._snapshot_active:
-                    await asyncio.sleep(0.6)
+                    await asyncio.sleep(1)
                 value = await self.call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
 
             if value == "OK":
@@ -1914,6 +1920,8 @@ class LinkPlayDevice(MediaPlayerEntity):
         #_LOGGER.debug('For: %s stated media_artist: %s', self._name, self._media_artist)
         
     async def async_detect_stream_url_redirection(self, uri):
+        if uri.find('tts_proxy') != -1: # skip redirect check for local TTS streams
+            return uri
         _LOGGER.debug('For: %s detect URI redirect-from:   %s', self._name, uri)
         redirect_detect = True
         check_uri = uri
@@ -2331,9 +2339,17 @@ class LinkPlayDevice(MediaPlayerEntity):
             return
 
         if not self._slave_mode:
-            self._snapshot_active = True
+            _LOGGER.debug("Player %s snaphsot source: %s, volume: %s, and uri to: %s", self.name, self._source, self._snap_volume, self._media_uri_final)
             self._snap_source = self._source
+            self._snapshot_active = True
             self._snap_state = self._state
+            self._snap_nometa = self._nometa
+            self._snap_playing_mediabrowser = self._playing_mediabrowser
+            self._snap_media_source_uri = self._media_source_uri
+
+            if self._source == "Network":
+                self._snap_uri = self._media_uri_final
+                
 
             if self._playing_spotify:
                 await self.async_preset_snap_via_upnp(str(self._preset_key))
@@ -2341,6 +2357,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._snap_volume = int(self._volume)
                 await self.call_linkplay_httpapi("setPlayerCmd:stop", None)
                 # await asyncio.sleep(0.2)
+                return
 
             elif self._state == STATE_IDLE:
                 self._snap_volume = int(self._volume)
@@ -2378,7 +2395,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             return
 
         if not self._slave_mode:
-            _LOGGER.warning("Player %s current source: %s, restoring volume: %s, and source to: %s", self.entity_id, self._source, self._snap_volume, self._snap_source)
+            _LOGGER.debug("Player %s current source: %s, restoring volume: %s, source: %s uri: %s", self.name, self._source, self._snap_volume, self._snap_source, self._snap_uri)
             if self._snap_state != STATE_UNKNOWN:
                 self._state = self._snap_state
                 self._snap_state = STATE_UNKNOWN
@@ -2386,21 +2403,32 @@ class LinkPlayDevice(MediaPlayerEntity):
             if self._snap_volume != 0:
                 await self.call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(self._snap_volume)), None)
                 self._snap_volume = 0
+
                 # await asyncio.sleep(.6)
+
+            self._playing_tts = False
 
             if self._snap_spotify:
                 self._snap_spotify = False
-                self._playing_tts = False
                 await self.call_linkplay_httpapi("MCUKeyShortClick:{0}".format(str(self._preset_key)), None)
-                # await asyncio.sleep(1)
                 self._snapshot_active = False
                 # await self.async_schedule_update_ha_state(True)
 
-            elif self._snap_source is not None:
-                self._playing_tts = False
+            elif self._snap_source != "Network":
                 self._snapshot_active = False
                 await self.async_select_source(self._snap_source)
                 self._snap_source = None
+            
+            elif self._snap_uri is not None:
+                self._playing_mediabrowser = self._snap_playing_mediabrowser
+                self._media_source_uri = self._snap_media_source_uri
+                self._media_uri = self._snap_uri
+                self._nometa = self._snap_nometa
+                await self.async_play_media(MEDIA_TYPE_URL, self._snap_uri)
+                await asyncio.sleep(1)
+                self._snapshot_active = False
+                self._snap_uri = None
+
         else:
             return
             #await self._master.async_restore()
