@@ -45,11 +45,11 @@ snapshot:
         entity:
           integration: linkplay
     switchinput:
-      name: Switch Input
-      description: Switch player to stream input along with snapshotting, before playing TTS. Applies for players with multiple inputs like Line-in, Optical, etc. Useful to try to handle the situation when first few seconds of the TTS message are cut off due to the latency of the player. Optional - if not specified, defaults to True.
+      name: Switch Input / Volume Only
+      description: To be used with Spotify Integration. Switch player to stream input along with snapshotting, before playing TTS. Applies for players with multiple inputs like Line-in, Optical, etc. Optional - if not specified, defaults to True.
       example: false
       required: false
-      default: true
+      default: false
       selector:
         boolean:
 

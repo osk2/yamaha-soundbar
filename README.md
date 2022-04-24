@@ -149,7 +149,10 @@ To prepare the player to play TTS and save the current state of it for restoring
     - service: linkplay.snapshot
       data:
         entity_id: media_player.sound_room1
+        switchinput: true
 ```
+Note the `switchinput` parameter: if the currently playing source is Spotify and this parameter is `True`, it will only save the current volume of the player. You can use Home Assistant's Spotify integration to pause playback within an automation (read further below). If it's `False`, it will save the current Spotify playlist to the player's preset memory. With other playback sources (like Line-In), it will only switch to network playback.
+
 To restore the player state:
 ```yaml
     - service: linkplay.restore
@@ -161,7 +164,7 @@ You can specify multiple entity ids separated by comma or use `all` to run the s
 - Input source
 - Webradio stream (as long as it's configured as an input source)
 - USB audio files playback (track will restart from the beginning)
-- Spotify (snapshot will use the device's highest preset number to store and recall the current playlist, playback may restart the same track or not, depends on Spotify settings. Note: You have to first manually store at least a preset first with the app).
+- Spotify: If the snapshot was taken with `switchinput` as `False`, it will recall the playlist, but playback may restart the same track or not, depends on Spotify settings. With `switchinput` as `True` it will do nothing, but you can resume playback from the Spotify integration in an automation (see example below).
 
 If you experience TTS audio being cut off at the beginning, this is because the player needs some time to switch to playing out the stream. The only good solution for this is to add a configurable amount of silence at the beginning of the audio stream, I've modified [Google Translate](https://github.com/nagyrobi/home-assistant-custom-components-google_translate) and [VoiceRSS](https://github.com/nagyrobi/home-assistant-custom-components-voicerss) to do this, they can be installed manually as custom components ([even through HACS, manually](https://hacs.xyz/docs/faq/custom_repositories)).
 
@@ -198,48 +201,7 @@ Implemented commands:
 
 If parameter `notify: False` is omitted, results will appear in Lovelace UI's left pane as persistent notifications which can be dismissed. You can specify multiple entity ids separated by comma or use `all` to run the service against.
 
-## Automation examples
-
-Intrerupt playback of a source, incrase volume by 15%, say a TTS message and resume playback when TTS finishes:
-```yaml
-- alias: 'Notify by TTS that Hanna has arrived Sound Room 1'
-  id: tts_mary_home_sound_room1
-  trigger:
-    - platform: state
-      entity_id: person.mary
-      to: 'home'
-  action:
-    - service: linkplay.snapshot
-      data:
-        entity_id: media_player.sound_room1
-    - service: media_player.volume_set
-      data:
-        entity_id: media_player.sound_room1
-        volume_level: "{{ state_attr('media_player.sound_room1', 'volume_level') | float + 0.15 }}"
-    - service: tts.google_translate_say
-      data:
-        entity_id: media_player.sound_room1
-        language: en
-        message: "Hanna has arrived home."
-
-- alias: 'Restore state after TTS for snapshotted Sound Room 1'
-  id: tts_restore_sound_room1
-  trigger:
-    - platform: state
-      entity_id: media_player.sound_room1
-      attribute: tts_active
-      to: false
-  condition:
-    - condition: state
-      entity_id: media_player.sound_room1
-      attribute: snapshot_active
-      state: true
-  action:
-    - service: linkplay.restore
-      data:
-        entity_id: media_player.sound_room1
-```
-No need for any delays in the automations. Trigger on attribute `tts_active` goes _false_ when the player finishes playing the TTS stream, and if `snapshot_active` is _true_ means that snapshot exists and can be restored.
+## Service call examples
 
 Play a sound file located on an http server or a webradio stream:
 ```yaml
@@ -258,6 +220,98 @@ Play the first sound file located on the local storage directly attached to the 
         media_content_id: '1'
         media_content_type: music
 ```
+
+## Automation examples
+
+Intrerupt playback of a source, incrase volume by 15%, say a TTS message and resume playback when TTS finishes. Note that to have Spotify also correctly paused and resumed, it needs to have the Spotify integration also installed in the system.
+
+```yaml
+- alias: 'Notify by TTS that Hanna has arrived Sound Room 1'
+  id: tts_mary_home_sound_room1
+  trigger:
+    - platform: state
+      entity_id: person.mary
+      to: 'home'
+  action:
+  - choose:
+    - conditions:
+      - condition: state
+        entity_id: media_player.sound_room1
+        attribute: source
+        state: 'Spotify'
+      sequence:
+      - service: media_player.media_pause
+        target:
+          entity_id: media_player.spotify
+      - service: linkplay.snapshot
+        data:
+          entity_id: media_player.sound_room1
+          switchinput: true
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.sound_room1
+          volume_level: "{{ state_attr('media_player.sound_room1', 'volume_level') | float + 0.15 }}"
+      - service: tts.google_translate_say
+        data:
+          entity_id: media_player.sound_room1
+          message: "Hanna has arrived home."
+          language: en
+    default:
+    - service: linkplay.snapshot
+      data:
+        entity_id: media_player.sound_room1
+    - service: media_player.volume_set
+      data:
+        entity_id: media_player.sound_room1
+        volume_level: "{{ state_attr('media_player.sound_room1', 'volume_level') | float + 0.15 }}"
+    - service: tts.google_translate_say
+      data:
+        entity_id: media_player.sound_room1
+        message: "Hanna has arrived home."
+        language: en
+
+- alias: 'Restore state after TTS for snapshotted Sound Room 1'
+  id: tts_restore_sound_room1
+  trigger:
+    - platform: state
+      entity_id: media_player.sound_room1
+      attribute: tts_active
+      to: false
+  condition:
+    - condition: state
+      entity_id: media_player.sound_room1
+      attribute: snapshot_active
+      state: true
+  action:
+  - choose:
+    - conditions:
+        condition: and
+        conditions:
+        - condition: state
+          entity_id: media_player.spotify
+          state: 'paused'
+        - condition: state
+          entity_id: media_player.spotify
+          attribute: source
+          state: 'Sound Room1'
+        - condition: state
+          entity_id: media_player.sound_room1
+          attribute: snapshot_spotify
+          state: true
+      sequence:
+      - service: linkplay.restore
+        data:
+          entity_id: media_player.sound_room1
+      - service: media_player.media_play_pause
+        target:
+          entity_id: media_player.spotify
+    default:
+    - service: linkplay.restore
+      data:
+        entity_id: media_player.sound_room1
+```
+No need for any delays in the automations. Trigger on attribute `tts_active` goes _false_ when the player finishes playing the TTS stream, and if `snapshot_active` is _true_ means that snapshot exists and can be restored. Also resumes Spotify playback if that's the case.
+
 
 Select an input and set volume and unmute via an automation:
 ```yaml

@@ -108,6 +108,7 @@ ATTR_STURI = 'stream_uri'
 ATTR_UUID = 'uuid'
 ATTR_TTS = 'tts_active'
 ATTR_SNAPSHOT = 'snapshot_active'
+ATTR_SNAPSPOT = 'snapshot_spotify'
 ATTR_DEBUG = 'debug_info'
 
 CONF_NAME = 'name'
@@ -185,11 +186,12 @@ SOURCES_MAP = {'-1': 'Idle',
                '48': 'XLR',
                '49': 'HDMI',
                '50': 'cd',
+               '51': 'Soundcard',
                '52': 'TFcard',
                '60': 'Talk',
                '99': 'Idle'}
 
-SOURCES_LIVEIN = ['-1', '0', '40', '41', '43', '44', '45', '46', '47', '48', '49', '50', '99']
+SOURCES_LIVEIN = ['-1', '0', '40', '41', '43', '44', '45', '46', '47', '48', '49', '50', '51', '99']
 SOURCES_STREAM = ['1', '2', '3', '10', '30']
 SOURCES_LOCALF = ['11', '16', '20', '21', '52', '60']
 
@@ -381,9 +383,12 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._snap_state = STATE_UNKNOWN
         self._snap_volume = 0
         self._snap_spotify = False
+        self._snap_spotify_volumeonly = False
         self._snap_nometa = False
         self._snap_playing_mediabrowser = False
         self._snap_media_source_uri = None
+        self._snap_seek = False
+        self._snap_playhead_position = 0
         
     async def async_added_to_hass(self):
         """Record entity."""
@@ -606,7 +611,10 @@ class LinkPlayDevice(MediaPlayerEntity):
                             self._first_update = False
 
             self._position_updated_at = utcnow()
-            
+
+            if self._player_statdata['type'] == '0':
+                self._slave_mode = False
+
             if self._multiroom_group == []:
                 self._slave_mode = False
                 self._is_master = False
@@ -624,12 +632,14 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._shuffle = {
                 '2': True,
                 '3': True,
+                '5': True,
             }.get(self._player_statdata['loop'], False)
 
             self._repeat = {
+                '0': REPEAT_MODE_ALL,
                 '1': REPEAT_MODE_ONE,
                 '2': REPEAT_MODE_ALL,
-                '0': REPEAT_MODE_ALL,
+                '5': REPEAT_MODE_ONE,
             }.get(self._player_statdata['loop'], REPEAT_MODE_OFF)
 
             # self._state = {
@@ -817,6 +827,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 
 
         # Get multiroom slave information #
+        
         slave_list = await self.call_linkplay_httpapi("multiroom:getSlaveList", True)
         if slave_list is None:
             self._is_master = False
@@ -1096,6 +1107,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         attributes[ATTR_TTS] = self._playing_tts
         attributes[ATTR_SNAPSHOT] = self._snapshot_active
+        attributes[ATTR_SNAPSPOT] = self._snap_spotify
 
         if DEBUGSTR_ATTR:
             atrdbg = ""
@@ -1292,6 +1304,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     async def async_media_seek(self, position):
         """Send media_seek command to media player."""
         if not self._slave_mode:
+            _LOGGER.debug("Seek. Device: %s, DUR: %s POS: %", self.name, self._duration, position)
             if self._duration > 0 and position >= 0 and position <= self._duration:
                 value = await self.call_linkplay_httpapi("setPlayerCmd:seek:{0}".format(str(position)), None)
                 self._position_updated_at = utcnow()
@@ -1370,6 +1383,10 @@ class LinkPlayDevice(MediaPlayerEntity):
             if media_id_check.endswith('.m3u') or media_id_check.endswith('.m3u8'):
                 _LOGGER.debug("For: %s, Detected M3U list: %s, Media_id: %s", self._name, media_id)
                 media_id = await self.async_parse_m3u_url(media_id)
+
+            if media_id_check.endswith('.pls'):
+                _LOGGER.debug("For: %s, Detected PLS list: %s, Media_id: %s", self._name, media_id)
+                media_id = await self.async_parse_pls_url(media_id)
 
             if media_type == MEDIA_TYPE_URL:
                 if self._playing_mediabrowser:
@@ -1956,20 +1973,20 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         if response.status == HTTPStatus.OK:
             data = await response.text()
-            _LOGGER.debug("For: %s playlist: %s  contents: %s", self._name, playlist, data)
+            _LOGGER.debug("For: %s M3U playlist: %s  contents: %s", self._name, playlist, data)
 
             lines = [line.strip("\n\r") for line in data.split("\n") if line.strip("\n\r") != ""]
             if len(lines) > 0:
-                _LOGGER.debug("For: %s playlist: %s  lines: %s", self._name, playlist, lines)
+                _LOGGER.debug("For: %s M3U playlist: %s  lines: %s", self._name, playlist, lines)
                 urls = [u for u in lines if u.startswith('http')]
-                _LOGGER.debug("For: %s playlist: %s  urls: %s", self._name, playlist, urls)
+                _LOGGER.debug("For: %s M3U playlist: %s  urls: %s", self._name, playlist, urls)
                 if len(urls) > 0:
                     return urls[0]
                 else:
-                    _LOGGER.error("For: %s playlist: %s No valid http URL in the playlist!!!", self._name, playlist)
+                    _LOGGER.error("For: %s M3U playlist: %s No valid http URL in the playlist!!!", self._name, playlist)
                     self._nometa = True
             else:
-                _LOGGER.error("For: %s playlist: %s No content to parse!!!", self._name, playlist)
+                _LOGGER.error("For: %s M3U playlist: %s No content to parse!!!", self._name, playlist)
 
         else:
             _LOGGER.error(
@@ -1982,7 +1999,50 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         return playlist
 
-    def _fwvercheck(self, v): #no async yet
+    async def async_parse_pls_url(self, playlist):
+        """Parse a PLS playlist URL for actual streams, and return the first one"""
+        try:
+            websession = async_get_clientsession(self.hass)
+            async with async_timeout.timeout(10):
+                response = await websession.get(playlist)
+
+        except (asyncio.TimeoutError, aiohttp.ClientError) as error:
+            _LOGGER.warning(
+                "For: %s unable to get the PLS playlist: %s", self._name, playlist
+            )
+            return playlist
+
+        if response.status == HTTPStatus.OK:
+            data = await response.text()
+            _LOGGER.debug("For: %s PLS playlist: %s  contents: %s", self._name, playlist, data)
+
+            lines = [line.strip("\n\r") for line in data.split("\n") if line.strip("\n\r") != ""]
+            if len(lines) > 0:
+                _LOGGER.debug("For: %s PLS playlist: %s  lines: %s", self._name, playlist, lines)
+                urls = [u for u in lines if u.startswith('File')]
+                _LOGGER.debug("For: %s PLS playlist: %s  urls: %s", self._name, playlist, urls)
+                if len(urls) > 0:
+                    url = urls[0].split('=')
+                    if len(url) > 1:
+                        return url[1]
+                else:
+                    _LOGGER.error("For: %s PLS playlist: %s No valid http URL in the playlist!!!", self._name, playlist)
+                    self._nometa = True
+            else:
+                _LOGGER.error("For: %s PLS playlist: %s No content to parse!!!", self._name, playlist)
+
+        else:
+            _LOGGER.error(
+                "For: %s (%s) Get failed, response code: %s Full message: %s",
+                self._name,
+                self._host,
+                response.status,
+                response,
+            )
+
+        return playlist
+
+    def _fwvercheck(self, v):
         filled = []
         for point in v.split("."):
             filled.append(point.zfill(8))
@@ -2339,23 +2399,36 @@ class LinkPlayDevice(MediaPlayerEntity):
             return
 
         if not self._slave_mode:
-            _LOGGER.debug("Player %s snaphsot source: %s, volume: %s, and uri to: %s", self.name, self._source, self._snap_volume, self._media_uri_final)
-            self._snap_source = self._source
             self._snapshot_active = True
+            self._snap_source = self._source
             self._snap_state = self._state
             self._snap_nometa = self._nometa
             self._snap_playing_mediabrowser = self._playing_mediabrowser
             self._snap_media_source_uri = self._media_source_uri
+            self._snap_playhead_position = self._playhead_position
+
+            if self._playing_localfile or self._playing_spotify or self._playing_webplaylist:
+                if self._state in [STATE_PLAYING, STATE_PAUSED]:
+                    self._snap_seek = True
+
+            elif self._playing_stream or self._playing_mediabrowser:
+                if self._state in [STATE_PLAYING, STATE_PAUSED] and self._playing_mediabrowser:
+                    self._snap_seek = True
+
+            _LOGGER.debug("Player %s snaphsot source: %s, volume: %s, uri: %s, seek: %s, pos: %s", self.name, self._source, self._snap_volume, self._media_uri_final, self._snap_seek, self._playhead_position)
 
             if self._source == "Network":
                 self._snap_uri = self._media_uri_final
                 
 
             if self._playing_spotify:
-                await self.async_preset_snap_via_upnp(str(self._preset_key))
+                if not switchinput:
+                    await self.async_preset_snap_via_upnp(str(self._preset_key))
+                    await self.call_linkplay_httpapi("setPlayerCmd:stop", None)
+                else:
+                    self._snap_spotify_volumeonly = True
                 self._snap_spotify = True
                 self._snap_volume = int(self._volume)
-                await self.call_linkplay_httpapi("setPlayerCmd:stop", None)
                 # await asyncio.sleep(0.2)
                 return
 
@@ -2395,10 +2468,9 @@ class LinkPlayDevice(MediaPlayerEntity):
             return
 
         if not self._slave_mode:
-            _LOGGER.debug("Player %s current source: %s, restoring volume: %s, source: %s uri: %s", self.name, self._source, self._snap_volume, self._snap_source, self._snap_uri)
+            _LOGGER.debug("Player %s current source: %s, restoring volume: %s, source: %s uri: %s, seek: %s, pos: %s", self.name, self._source, self._snap_volume, self._snap_source, self._snap_uri, self._snap_seek, self._snap_playhead_position)
             if self._snap_state != STATE_UNKNOWN:
                 self._state = self._snap_state
-                self._snap_state = STATE_UNKNOWN
 
             if self._snap_volume != 0:
                 await self.call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(self._snap_volume)), None)
@@ -2407,11 +2479,14 @@ class LinkPlayDevice(MediaPlayerEntity):
                 # await asyncio.sleep(.6)
 
             self._playing_tts = False
+            self._playhead_position = self._snap_playhead_position
 
             if self._snap_spotify:
                 self._snap_spotify = False
-                await self.call_linkplay_httpapi("MCUKeyShortClick:{0}".format(str(self._preset_key)), None)
+                if not self._snap_spotify_volumeonly:
+                    await self.call_linkplay_httpapi("MCUKeyShortClick:{0}".format(str(self._preset_key)), None)
                 self._snapshot_active = False
+                self._snap_spotify_volumeonly = False
                 # await self.async_schedule_update_ha_state(True)
 
             elif self._snap_source != "Network":
@@ -2424,10 +2499,22 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._media_source_uri = self._snap_media_source_uri
                 self._media_uri = self._snap_uri
                 self._nometa = self._snap_nometa
-                await self.async_play_media(MEDIA_TYPE_URL, self._snap_uri)
-                await asyncio.sleep(1)
+                if self._snap_state in [STATE_PLAYING, STATE_PAUSED]:  # self._media_uri.find('tts_proxy') == -1
+                    await self.async_play_media(MEDIA_TYPE_URL, self._media_uri)
                 self._snapshot_active = False
                 self._snap_uri = None
+
+            if self._snap_state in [STATE_PLAYING, STATE_PAUSED]:
+                await asyncio.sleep(0.5)
+                if self._snap_seek and self._snap_playhead_position > 0:
+                    _LOGGER.debug("Seekin'")
+                    await self.call_linkplay_httpapi("setPlayerCmd:seek:{0}".format(str(self._snap_playhead_position)), None)
+                    if self._snap_state == STATE_PAUSED:
+                        await self.async_media_pause()
+
+            self._snap_state = STATE_UNKNOWN
+            self._snap_seek = False
+            self._snap_playhead_position = 0
 
         else:
             return
@@ -2491,8 +2578,8 @@ class LinkPlayDevice(MediaPlayerEntity):
         media_metadata = None
         try:
             media_info = await self._service.action("GetMediaInfo").async_call(InstanceID=0)
-            self._trackc = media_info.get('TrackSource')
-            self._media_uri_final = media_info.get('CurrentURI')
+            self._trackc = media_info.get('CurrentURI')
+            self._media_uri_final = media_info.get('TrackSource')
             media_metadata = media_info.get('CurrentURIMetaData')
             #_LOGGER.debug("GetMediaInfo for: %s, UPNP media_metadata:%s", self.entity_id, media_info)
         except:
