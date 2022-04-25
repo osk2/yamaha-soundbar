@@ -223,7 +223,7 @@ Play the first sound file located on the local storage directly attached to the 
 
 ## Automation examples
 
-Intrerupt playback of a source, incrase volume by 15%, say a TTS message and resume playback when TTS finishes. Note that to have Spotify correctly paused and resumed, it needs to have the Spotify integration also installed in the system. The template renders the `entity_id` of the Spotify instance playing on the actual Liknkplay device.
+Intrerupt playback of a source, incrase volume by 15%, say a TTS message and resume playback when TTS finishes. Note that to have Spotify correctly paused and resumed, it needs to have the Spotify integration also installed in the system with a Premium account. The template renders the `entity_id` of the Spotify instance playing on the actual Liknkplay device.
 
 ```yaml
 - alias: 'Notify by TTS that Hanna has arrived Sound Room 1'
