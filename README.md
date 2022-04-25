@@ -61,6 +61,9 @@ media_player:
 **name:**  
   *(string)* *(Required)* Name that Home Assistant will generate the `entity_id` based on. It is also the base of the friendly name seen in the dashboard, but will be overriden by the device name set in the Android app.
 
+**uuid:**  
+  *(string)* *(Optional)* Hardware UUID of the player. Can be read out from the attibutes of the entity. Set it manually to that value to handle double-added entity cases when Home Assistant starts up without the Linkplay device being on the network at that moment.
+
 **volume_step:**  
   *(integer)* *(Optional)* Step size in percent to change volume when calling `volume_up` or `volume_down` service against the media player. Defaults to `5`, can be a number between `1` and `25`. 
 
@@ -107,9 +110,6 @@ _Note:_ **Don't** use HTTP**S** streams. Linkplay chipsets seem to have limited 
 
 **multiroom_wifidirect:**  
   *(boolean)* *(Optional)* Set to `True` to override the default router mode used by the component with wifi-direct connection mode (more details below).
-
-**uuid:**  
-  *(string)* *(Optional)* Hardware UUID of the player. Can be read out from the attibutes of the entity. Set it manually to that value to handle double-added entity cases when Home Assistant starts up without the Linkplay device being on the network at that moment.
 
 **led_off:**  
   *(boolean)* *(Optional)* Set to `True` to turn off the LED on the front panel of the Arylic devices (works only for this brand).
@@ -166,7 +166,7 @@ You can specify multiple entity ids separated by comma or use `all` to run the s
 - USB audio files playback (track will restart from the beginning)
 - Spotify: If the snapshot was taken with `switchinput` as `False`, it will recall the playlist, but playback may restart the same track or not, depends on Spotify settings. With `switchinput` as `True` it will do nothing, but you can resume playback from the Spotify integration in an automation (see example below).
 
-If you experience TTS audio being cut off at the beginning, this is because the player needs some time to switch to playing out the stream. The only good solution for this is to add a configurable amount of silence at the beginning of the audio stream, I've modified [Google Translate](https://github.com/nagyrobi/home-assistant-custom-components-google_translate) and [VoiceRSS](https://github.com/nagyrobi/home-assistant-custom-components-voicerss) to do this, they can be installed manually as custom components ([even through HACS, manually](https://hacs.xyz/docs/faq/custom_repositories)).
+If you experience TTS audio being cut off at the beginning, this is because the player needs some time to switch to playing out the stream. The only good solution for this is to add a configurable amount of silence at the beginning of the audio stream, I've modified [Google Translate](https://github.com/nagyrobi/home-assistant-custom-components-google_translate) and [VoiceRSS](https://github.com/nagyrobi/home-assistant-custom-components-voicerss) to do this, they can be installed manually as custom components ([even through HACS, manually](https://hacs.xyz/docs/faq/custom_repositories)). Linkplay modules seem to need about `800`ms of silence at the beginning of the stream in order for the first soundbits not to be cut down from the speech.
 
 ## Presets
 
@@ -223,7 +223,7 @@ Play the first sound file located on the local storage directly attached to the 
 
 ## Automation examples
 
-Intrerupt playback of a source, incrase volume by 15%, say a TTS message and resume playback when TTS finishes. Note that to have Spotify also correctly paused and resumed, it needs to have the Spotify integration also installed in the system.
+Intrerupt playback of a source, incrase volume by 15%, say a TTS message and resume playback when TTS finishes. Note that to have Spotify also correctly paused and resumed, it needs to have the Spotify integration also installed in the system. The template renders the `entity_id` of the Spotify instance playing on the actual Liknkplay device.
 
 ```yaml
 - alias: 'Notify by TTS that Hanna has arrived Sound Room 1'
@@ -242,7 +242,14 @@ Intrerupt playback of a source, incrase volume by 15%, say a TTS message and res
       sequence:
       - service: media_player.media_pause
         target:
-          entity_id: media_player.spotify
+          entity_id: >
+            {{ 
+              expand(states.media_player) 
+              |selectattr('state', 'eq', 'playing')
+              |selectattr('attributes.source', 'eq', state_attr('media_player.sound_room1', 'friendly_name'))
+              |map(attribute='entity_id')
+              |join
+            }}
       - service: linkplay.snapshot
         data:
           entity_id: media_player.sound_room1
@@ -288,23 +295,32 @@ Intrerupt playback of a source, incrase volume by 15%, say a TTS message and res
         condition: and
         conditions:
         - condition: state
-          entity_id: media_player.spotify
-          state: 'paused'
-        - condition: state
-          entity_id: media_player.spotify
-          attribute: source
-          state: 'Sound Room1'
-        - condition: state
           entity_id: media_player.sound_room1
           attribute: snapshot_spotify
           state: true
+        - condition: template
+          value_template: >
+            {{ 
+              (expand(states.media_player) 
+              |selectattr('state', 'eq', 'paused')
+              |selectattr('attributes.source', 'eq', state_attr('media_player.sound_room1', 'friendly_name'))
+              |map(attribute='entity_id')
+              |list|count) > 0
+            }}
       sequence:
       - service: linkplay.restore
         data:
           entity_id: media_player.sound_room1
       - service: media_player.media_play_pause
         target:
-          entity_id: media_player.spotify
+          entity_id: >
+            {{ 
+              expand(states.media_player) 
+              |selectattr('state', 'eq', 'paused')
+              |selectattr('attributes.source', 'eq', state_attr('media_player.sound_room1', 'friendly_name'))
+              |map(attribute='entity_id')
+              |join
+            }}
     default:
     - service: linkplay.restore
       data:
