@@ -230,7 +230,7 @@ Intrerupt playback of a source, incrase volume by 15%, say a TTS message and res
   id: tts_mary_home_sound_room1
   trigger:
     - platform: state
-      entity_id: person.mary
+      entity_id: person.hanna
       to: 'home'
   action:
   - choose:
