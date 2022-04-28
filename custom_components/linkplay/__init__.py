@@ -58,12 +58,6 @@ SNAP_SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_SNAP, default=True): cv.boolean
 })
 
-GETTRK_SERVICE_SCHEMA = vol.Schema({
-    vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-    vol.Required(ATTR_SELECT): cv.entity_id,
-    vol.Optional(ATTR_SOURCE, default='USB'): cv.string
-})
-
 PLYTRK_SERVICE_SCHEMA = vol.Schema({
     vol.Required(ATTR_ENTITY_ID): cv.entity_id,
     vol.Required(ATTR_TRACK): cv.template
