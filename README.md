@@ -257,7 +257,13 @@ Intrerupt playback of a source, incrase volume by 15%, say a TTS message and res
       - service: media_player.volume_set
         data:
           entity_id: media_player.sound_room1
-          volume_level: "{{ state_attr('media_player.sound_room1', 'volume_level') | float + 0.15 }}"
+          volume_level: >
+            {% set vol = state_attr('media_player.sound_room1', 'volume_level') %}
+            {% if vol < 0.85 %}
+            {{ vol + 0.15 }}
+            {% else %}
+            {{ vol }}
+            {% endif %}
       - service: tts.google_translate_say
         data:
           entity_id: media_player.sound_room1
@@ -270,7 +276,13 @@ Intrerupt playback of a source, incrase volume by 15%, say a TTS message and res
     - service: media_player.volume_set
       data:
         entity_id: media_player.sound_room1
-        volume_level: "{{ state_attr('media_player.sound_room1', 'volume_level') | float + 0.15 }}"
+        volume_level: >
+            {% set vol = state_attr('media_player.sound_room1', 'volume_level') %}
+            {% if vol < 0.85 %}
+            {{ vol + 0.15 }}
+            {% else %}
+            {{ vol }}
+            {% endif %}
     - service: tts.google_translate_say
       data:
         entity_id: media_player.sound_room1
