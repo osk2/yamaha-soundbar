@@ -277,54 +277,56 @@ Intrerupt playback of a source, incrase volume by 15%, say a TTS message and res
         message: "Hanna has arrived home."
         language: en
 
-- alias: 'Restore state after TTS for snapshotted Sound Room 1'
+- alias: 'Restore state after TTS for snapshotted players'
   id: tts_restore_sound_room1
   trigger:
     - platform: state
       entity_id: media_player.sound_room1
       attribute: tts_active
       to: false
+    - platform: state
+      entity_id: media_player.sound_room2
+      attribute: tts_active
+      to: false
   condition:
-    - condition: state
-      entity_id: media_player.sound_room1
-      attribute: snapshot_active
-      state: true
+    - condition: template
+      value_template: >
+        {{ trigger.to_state.attributes.snapshot_active }}
   action:
   - choose:
     - conditions:
         condition: and
         conditions:
-        - condition: state
-          entity_id: media_player.sound_room1
-          attribute: snapshot_spotify
-          state: true
+        - condition: template
+          value_template: >
+            {{ trigger.to_state.attributes.snapshot_spotify }}
         - condition: template
           value_template: >
             {{ 
               (expand(states.media_player) 
               |selectattr('state', 'eq', 'paused')
-              |selectattr('attributes.source', 'eq', state_attr('media_player.sound_room1', 'friendly_name'))
+              |selectattr('attributes.source', 'eq', trigger.to_state.attributes.friendly_name)
               |map(attribute='entity_id')
               |list|count) > 0
             }}
       sequence:
       - service: linkplay.restore
         data:
-          entity_id: media_player.sound_room1
+          entity_id: "{{ trigger.entity_id }}"
       - service: media_player.media_play_pause
         target:
           entity_id: >
             {{ 
               expand(states.media_player) 
               |selectattr('state', 'eq', 'paused')
-              |selectattr('attributes.source', 'eq', state_attr('media_player.sound_room1', 'friendly_name'))
+              |selectattr('attributes.source', 'eq', trigger.to_state.attributes.friendly_name)
               |map(attribute='entity_id')
               |join
             }}
     default:
     - service: linkplay.restore
       data:
-        entity_id: media_player.sound_room1
+        entity_id: "{{ trigger.entity_id }}"
 ```
 No need for any delays in the automations. Trigger on attribute `tts_active` goes _false_ when the player finishes playing the TTS stream, and if `snapshot_active` is _true_ means that snapshot exists and can be restored. Also resumes Spotify playback if that's the case.
 

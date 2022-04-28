@@ -144,7 +144,7 @@ UNA_THROTTLE = timedelta(seconds=20)
 MROOM_UJWDIR = timedelta(seconds=20)
 MROOM_UJWROU = timedelta(seconds=3)
 SPOTIFY_PAUSED_TIMEOUT = timedelta(seconds=300)
-AUTOIDLE_STATE_TIMEOUT = timedelta(seconds=1)
+AUTOIDLE_STATE_TIMEOUT = timedelta(seconds=2)
 #PARALLEL_UPDATES = 0
 
 CUT_EXTENSIONS = ['mp3', 'mp2', 'm2a', 'mpg', 'wav', 'aac', 'flac', 'flc', 'm4a', 'ape', 'wma', 'ac3', 'ogg']
@@ -649,9 +649,11 @@ class LinkPlayDevice(MediaPlayerEntity):
                 # 'pause': STATE_PAUSED,
             # }.get(self._player_statdata['status'], STATE_IDLE)
             
-            if (self._player_statdata['mode'] in ['-1', '0', '99'] or self._player_statdata['status'] == 'stop'): 
+            if (self._player_statdata['mode'] in ['-1', '0'] or self._player_statdata['status'] == 'stop'): 
                 if utcnow() >= (self._idletime_updated_at + AUTOIDLE_STATE_TIMEOUT):
                     self._state = STATE_IDLE
+                    self._media_uri_final = None
+                    self._media_uri = None
                     #_LOGGER.debug("05 DETECTED %s, %s", self.entity_id, self._state)
             elif self._player_statdata['status'] in ['play', 'load']:
                 self._state = STATE_PLAYING
@@ -988,7 +990,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._features = \
             SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | SUPPORT_GROUPING | SUPPORT_BROWSE_MEDIA | \
             SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
-            SUPPORT_STOP
+            SUPPORT_STOP | SUPPORT_PLAY
 
         return self._features
 
@@ -1203,7 +1205,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     return
 
                 if temp_source.startswith('http') or temp_source == 'udisk' or temp_source == 'TFcard':
-                    self.select_source(self._prev_source)
+                    await self.async_select_source(self._prev_source)
                     if self._source != None:
                         self._source = None
                         value = "OK"
@@ -1291,6 +1293,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._position_updated_at = utcnow()
                 self._idletime_updated_at = self._position_updated_at
                 self._spotify_paused_at = None
+                self._snapshot_active = False
                 #await self.async_schedule_update_ha_state(True)
                 if self._slave_list is not None:
                     for slave in self._slave_list:
@@ -2098,7 +2101,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 
     async def async_restore_previous_source(self):
         """Set to the last known source after exiting multiroom."""
-        self.select_source(self._multiroom_prevsrc)
+        await self.async_select_source(self._multiroom_prevsrc)
         self._multiroom_prevsrc = None
 
     async def async_set_media_title(self, title):
