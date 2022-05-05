@@ -290,7 +290,7 @@ Intrerupt playback of a source, incrase volume by 15%, say a TTS message and res
         language: en
 
 - alias: 'Restore state after TTS for snapshotted players'
-  id: tts_restore_sound_room1
+  id: tts_restore_from_snapshot
   trigger:
     - platform: state
       entity_id: 
