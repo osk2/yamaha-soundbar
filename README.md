@@ -293,11 +293,9 @@ Intrerupt playback of a source, incrase volume by 15%, say a TTS message and res
   id: tts_restore_sound_room1
   trigger:
     - platform: state
-      entity_id: media_player.sound_room1
-      attribute: tts_active
-      to: false
-    - platform: state
-      entity_id: media_player.sound_room2
+      entity_id: 
+        - media_player.sound_room1
+        - media_player.sound_room2
       attribute: tts_active
       to: false
   condition:
