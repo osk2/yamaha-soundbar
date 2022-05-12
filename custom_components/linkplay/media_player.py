@@ -49,6 +49,7 @@ from homeassistant.components.media_player.browse_media import (
 
 from homeassistant.components.media_player.const import (
     ATTR_GROUP_MEMBERS,
+    ATTR_MEDIA_CONTENT_ID,
     MEDIA_TYPE_MUSIC,
     MEDIA_TYPE_URL,
     MEDIA_TYPE_TRACK,
@@ -104,12 +105,12 @@ ATTR_LINKPLAY_GROUP = 'linkplay_group'
 ATTR_FWVER = 'firmware'
 ATTR_TRCNT = 'tracks_local'
 ATTR_TRCRT = 'track_current'
-ATTR_STURI = 'stream_uri'
 ATTR_UUID = 'uuid'
 ATTR_TTS = 'tts_active'
 ATTR_SNAPSHOT = 'snapshot_active'
 ATTR_SNAPSPOT = 'snapshot_spotify'
 ATTR_DEBUG = 'debug_info'
+ATTR_MASS_POSITION = 'media_position_mass'
 
 CONF_NAME = 'name'
 CONF_LASTFM_API_KEY = 'lastfm_api_key'
@@ -332,6 +333,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._sound_mode = None
         self._muted = False
         self._playhead_position = 0
+        self._mass_position = 0
         self._duration = 0
         self._position_updated_at = None
         self._spotify_paused_at = None
@@ -366,6 +368,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._playing_webplaylist = False
         self._playing_tts = False
         self._playing_mediabrowser = False
+        self._playing_mass = False
         self._slave_list = None
         self._multiroom_wifidirect = multiroom_wifidirect
         self._multiroom_group = []
@@ -389,11 +392,20 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._snap_media_source_uri = None
         self._snap_seek = False
         self._snap_playhead_position = 0
-        
+
+        # Listen for Music Assistant bus events
+        hass.bus.async_listen("mass_event", self.handle_event)
+
     async def async_added_to_hass(self):
         """Record entity."""
         self.hass.data[DOMAIN].entities.append(self)
 
+    def handle_event(self, event):
+        """Retrieve events from Music Assistant through the event bus."""
+        if self.entity_id == event.data.get("object_id"):
+            if self._playing_mass:
+                self.get_music_assistant_metadata(event)
+           
     async def call_linkplay_httpapi(self, cmd, jsn):
         """Get the latest data from HTTPAPI service."""
         url = "http://{0}/httpapi.asp?command={1}".format(self._host, cmd)
@@ -483,6 +495,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._media_uri_final = None
             self._media_source_uri = None
             self._playing_mediabrowser = False
+            self._playing_mass = False
             self._playing_stream = False
             self._icecast_name = None
             self._source = None
@@ -662,13 +675,16 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._state = STATE_PAUSED
                 #_LOGGER.debug("05 DETECTED %s, %s", self.entity_id, self._state)
 
-            if self._state in [STATE_PLAYING, STATE_PAUSED]:
-                self._duration = int(int(self._player_statdata['totlen']) / 1000)
-                self._playhead_position = int(int(self._player_statdata['curpos']) / 1000)
-                #_LOGGER.debug("04 Update DUR, POS %s, %s, %s, %s, %s", self.entity_id, self._name, self._state, self._duration, self._playhead_position)
-            else:
-                self._duration = 0
-                self._playhead_position = 0
+            self._mass_position = int(int(self._player_statdata['curpos']) / 1000)
+            
+            if not self._playing_mass:
+                if self._state in [STATE_PLAYING, STATE_PAUSED]:
+                    self._duration = int(int(self._player_statdata['totlen']) / 1000)
+                    self._playhead_position = int(int(self._player_statdata['curpos']) / 1000)
+                    _LOGGER.debug("04 Update DUR, POS %s, %s, %s, %s, %s", self.entity_id, self._name, self._state, self._duration, self._playhead_position)
+                else:
+                    self._duration = 0
+                    self._playhead_position = 0
 
             #_LOGGER.debug("05 Update self._playing_whatever %s, %s", self.entity_id, self._name)
             self._playing_spotify = bool(self._player_statdata['mode'] == '31')
@@ -679,6 +695,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             if bool(self._player_statdata['mode'] != '10'):
                 #self._playing_tts = False
                 self._playing_mediabrowser = False
+                self._playing_mass = False
 
             if not (self._playing_liveinput or self._playing_stream or self._playing_spotify):
                 self._playing_localfile = True
@@ -704,7 +721,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     bool(self._media_uri.find('.dzcdn.') != -1) or \
                     bool(self._media_uri.find('.deezer.') != -1)
 
-            if not self._playing_webplaylist:
+            if not (self._playing_webplaylist or self._playing_mass):
                 #_LOGGER.debug("07 Set Name to Source: %s, %s", self.entity_id, self._name)
                 source_t = SOURCES_MAP.get(self._player_statdata['mode'], 'Network')
                 source_n = None
@@ -781,7 +798,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._icecast_name = None
                     self._playing_tts = False
 
-                if self._playing_localfile and self._state in [STATE_PLAYING, STATE_PAUSED] and not self._playing_tts:
+                if self._playing_localfile and self._state in [STATE_PLAYING, STATE_PAUSED] and not self._playing_tts and not self._playing_mass:
                     #_LOGGER.debug("10 Update async_get_playerstatus_metadata FILE %s, %s", self.entity_id, self._name)
                     await self.async_get_playerstatus_metadata(self._player_statdata)
 
@@ -799,12 +816,12 @@ class LinkPlayDevice(MediaPlayerEntity):
                     else:
                         self._media_title = self._source
 
-                elif self._state == STATE_PLAYING and self._media_uri and int(self._player_statdata['totlen']) > 0 and not self._snapshot_active and not self._playing_tts and not self._playing_mediabrowser:
+                elif self._state == STATE_PLAYING and self._media_uri and int(self._player_statdata['totlen']) > 0 and not self._snapshot_active and not self._playing_tts and not self._playing_mediabrowser and not self._playing_mass:
                     #_LOGGER.debug("10 Update async_get_playerstatus_metadata media_URI %s, %s", self.entity_id, self._name)
                     if not self._nometa:
                         await self.async_get_playerstatus_metadata(self._player_statdata)
 
-                elif self._state == STATE_PLAYING and self._media_uri_final and int(self._player_statdata['totlen']) <= 0 and not self._snapshot_active and not self._playing_tts:
+                elif self._state == STATE_PLAYING and self._media_uri_final and int(self._player_statdata['totlen']) <= 0 and not self._snapshot_active and not self._playing_tts and not self._playing_mass:
                     #_LOGGER.debug("10 Update async_update_from_icecast FILE %s, %s", self.entity_id, self._name)
                     if self._ice_skip_throt:
                         await self.async_update_from_icecast(no_throttle=True)
@@ -817,7 +834,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                         await self.async_get_local_mediasource_metadata_from_path()
 
                 self._new_song = await self.async_is_playing_new_track()
-                if self._lastfm_api_key is not None and self._new_song:
+                if self._lastfm_api_key is not None and self._new_song and not self._playing_mass:
                     #_LOGGER.debug("11 Update async_get_lastfm_coverart %s, %s", self.entity_id, self._name)
                     await self.async_get_lastfm_coverart()
 
@@ -964,7 +981,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         if self._slave_mode and self._features:
             return self._features
 
-        if self._playing_localfile or self._playing_spotify or self._playing_webplaylist:
+        if self._playing_localfile or self._playing_spotify or self._playing_webplaylist or self._playing_mass:
             if self._state in [STATE_PLAYING, STATE_PAUSED]:
                 self._features = \
                 SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | SUPPORT_GROUPING | SUPPORT_BROWSE_MEDIA | \
@@ -983,7 +1000,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | SUPPORT_GROUPING | SUPPORT_BROWSE_MEDIA | \
             SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
             SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE
-            if self._state in [STATE_PLAYING, STATE_PAUSED] and self._playing_mediabrowser:
+            if self._state in [STATE_PLAYING, STATE_PAUSED] and (self._playing_mediabrowser):
                 self._features |= SUPPORT_SEEK
 
         elif self._playing_liveinput:
@@ -997,7 +1014,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def media_position(self):
         """Time in seconds of current playback head position."""
-        if (self._playing_localfile or self._playing_spotify or self._slave_mode or self._playing_mediabrowser) and self._state != STATE_UNAVAILABLE:
+        if (self._playing_localfile or self._playing_spotify or self._slave_mode or self._playing_mediabrowser or self._playing_mass) and self._state != STATE_UNAVAILABLE:
             return self._playhead_position
         else:
             return None
@@ -1005,7 +1022,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     @property
     def media_duration(self):
         """Time in seconds of current song duration."""
-        if (self._playing_localfile or self._playing_spotify or self._slave_mode or self._playing_mediabrowser) and self._state != STATE_UNAVAILABLE:
+        if (self._playing_localfile or self._playing_spotify or self._slave_mode or self._playing_mediabrowser or self._playing_mass) and self._state != STATE_UNAVAILABLE:
             return self._duration
         else:
             return None
@@ -1054,6 +1071,11 @@ class LinkPlayDevice(MediaPlayerEntity):
         return MEDIA_TYPE_MUSIC
 
     @property
+    def media_content_id(self):
+        """Content ID of current playing media."""
+        return self._media_uri_final
+
+    @property
     def ssid(self):
         """SSID to use for multiroom configuration."""
         return self._ssid
@@ -1099,7 +1121,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         if self._slave_mode:
             attributes[ATTR_SLAVE] = self._slave_mode
         if self._media_uri_final:
-            attributes[ATTR_STURI] = self._media_uri_final
+            attributes[ATTR_MEDIA_CONTENT_ID] = self._media_uri_final
         if len(self._trackq) > 0:
             attributes[ATTR_TRCNT] = len(self._trackq) - 1
         if self._trackc:
@@ -1110,6 +1132,8 @@ class LinkPlayDevice(MediaPlayerEntity):
         attributes[ATTR_TTS] = self._playing_tts
         attributes[ATTR_SNAPSHOT] = self._snapshot_active
         attributes[ATTR_SNAPSPOT] = self._snap_spotify
+        
+        attributes[ATTR_MASS_POSITION] = self._mass_position
 
         if DEBUGSTR_ATTR:
             atrdbg = ""
@@ -1133,6 +1157,9 @@ class LinkPlayDevice(MediaPlayerEntity):
                 
             if self._playing_mediabrowser:
                 atrdbg = atrdbg + " _playing_mediabrowser"
+                
+            if self._playing_mass:
+                atrdbg = atrdbg + " _playing_mass"
 
             attributes[ATTR_DEBUG] = atrdbg
 
@@ -1232,7 +1259,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     async def async_media_pause(self):
         """Send media_pause command to media player."""
         if not self._slave_mode:
-            if self._playing_stream and not self._playing_mediabrowser:
+            if self._playing_stream and not (self._playing_mediabrowser or self._playing_mass):
                 # Pausing a live stream will cause a buffer overrun in hardware. Stop is the correct procedure in this case.
                 # If the stream is configured as an input source, when pressing Play after this, it will be started again (using self._prev_source).
                 await self.async_media_stop()
@@ -1287,6 +1314,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._media_uri_final = None
                 self._media_source_uri = None
                 self._playing_mediabrowser = False
+                self._playing_mass = False
                 self._playing_stream = False
                 self._trackc = None
                 self._media_image_url = None
@@ -1383,6 +1411,11 @@ class LinkPlayDevice(MediaPlayerEntity):
             if media_id_check.startswith('http'):
                 media_type = MEDIA_TYPE_URL
 
+            if media_id_check.find('8095/media_player') != -1:  # Music Assistant exception, not to be treated by server redirect checker and other metadata parsers
+                self._playing_mass = True
+            else:
+                self._playing_mass = False
+
             if media_id_check.endswith('.m3u') or media_id_check.endswith('.m3u8'):
                 _LOGGER.debug("For: %s, Detected M3U list: %s, Media_id: %s", self._name, media_id)
                 media_id = await self.async_parse_m3u_url(media_id)
@@ -1392,7 +1425,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 media_id = await self.async_parse_pls_url(media_id)
 
             if media_type == MEDIA_TYPE_URL:
-                if self._playing_mediabrowser:
+                if self._playing_mediabrowser or self._playing_mass:
                     media_id_final = media_id
                 else:
                     media_id_final = await self.async_detect_stream_url_redirection(media_id)
@@ -1419,6 +1452,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 #_LOGGER.debug("Setting TTS: %s, %s", self.entity_id, self._name)
                 self._playing_tts = True
                 self._playing_mediabrowser = False
+                self._playing_mass = False
                 self._playing_stream = False
             else:
                 self._playing_tts = False
@@ -1484,6 +1518,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     else:
                         self._wait_for_mcu = 0.5
                     self._playing_tts = False
+                    self._playing_mass = False
                     self._source = source
                     self._media_uri = temp_source
                     self._media_uri_final = temp_source_final
@@ -1681,7 +1716,6 @@ class LinkPlayDevice(MediaPlayerEntity):
             else:
                 _LOGGER.warning("Failed to set volume. Device: %s, Got response: %s", self.entity_id, value)
 
-
     async def async_mute_volume(self, mute):
         """Mute (true) or unmute (false) media player."""
         if not (self._slave_mode and self._multiroom_wifidirect):
@@ -1700,6 +1734,18 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._muted = bool(int(mute))
             else:
                 _LOGGER.warning("Failed mute/unmute volume. Device: %s, Got response: %s", self.entity_id, value)
+
+    async def async_turn_on(self):
+        """Use Mune/Unmute instead, because power is not supported."""
+        await self.async_mute_volume(False)
+
+    async def async_turn_off(self):
+        """Use Mune/Unmute instead, because power is not supported."""
+        await self.async_mute_volume(True)
+
+    async def async_toggle(self):
+        """Use Mune/Unmute instead, because power is not supported."""
+        await self.async_mute_volume(not self._muted)
 
     async def call_update_lastfm(self, cmd, params):
         """Update LastFM metadata."""
@@ -1750,6 +1796,62 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._media_image_url = None
             else:
                 self._media_image_url = coverart_url
+
+    def get_music_assistant_metadata(self, event):
+        radio = False
+        if self._state in [STATE_PLAYING, STATE_PAUSED]:
+            if event.data.get("type") == "queue updated":
+
+                if event.data.get("data").get("current_item").get("media_type") == "radio":
+                    radio = True
+                    self._media_title = event.data.get("data").get("current_item").get("name")
+                    self._media_artist = None
+                    self._duration = 0
+                    self._playhead_position = 0
+                else:
+                    radio = False
+
+                    try:
+                        self._media_title = event.data.get("data").get("current_item").get("media_item").get("name")
+                    except (ValueError, KeyError):
+                        try:
+                            self._media_title = event.data.get("data").get("current_item").get("name")
+                        except (ValueError, KeyError):
+                            self._media_title = None
+
+                    try:
+                        self._media_artist = event.data.get("data").get("current_item").get("media_item").get("album").get("artist").get("name")
+                    except (ValueError, KeyError):
+                        try:
+                            self._media_artist = event.data.get("data").get("current_item").get("media_item").get("artists")[0].get("name")
+                        except (ValueError, KeyError):
+                            self._media_artist = None
+
+                    try:
+                        self._media_image_url = event.data.get("data").get("current_item").get("image")
+                    except (ValueError, KeyError):
+                        self._media_image_url = None
+                
+                    try:
+                        self._duration = event.data.get("data").get("current_item").get("duration")
+                    except (ValueError, KeyError):
+                        self._duration = 0
+
+            elif event.data.get("type") == "queue time updated":
+                if not radio:
+                    try:
+                        self._playhead_position = event.data.get("data")
+                    except (ValueError, KeyError):
+                        pass
+
+#                titles = event.data.get("data").get("current_item").get("name").split(' - ')
+#                if len(titles) > 1:
+#                    self._media_artist = titles[0]
+#                    self._media_title = titles[1]
+#                else:
+#                    self._media_title = titles[0]
+
+            #_LOGGER.debug("EVENT for: %s TITLE: %s DUR: %s POS: %s IMAGE: %s", self.entity_id, self._media_title, self._duration, self._playhead_position, self._media_image_url)
 
     async def async_get_local_mediasource_metadata_from_path(self):
         if self._media_source_uri is not None:
