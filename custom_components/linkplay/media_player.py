@@ -1804,15 +1804,26 @@ class LinkPlayDevice(MediaPlayerEntity):
 
                 if event.data.get("data").get("current_item").get("media_type") == "radio":
                     radio = True
-                    self._media_title = event.data.get("data").get("current_item").get("name")
+                    try:
+                        self._media_title = event.data.get("data").get("current_item").get("name")
+                    except (ValueError, KeyError):
+                        self._media_title = None
+
+                    try:
+                        self._media_image_url = event.data.get("data").get("current_item").get("image")
+                    except (ValueError, KeyError):
+                        self._media_image_url = None
+
                     self._media_artist = None
                     self._duration = 0
                     self._playhead_position = 0
                 else:
                     radio = False
-
                     try:
-                        self._media_title = event.data.get("data").get("current_item").get("media_item").get("name")
+                        self._media_title = event.data.get("data").get("current_item").get("media_item").get("name") 
+                        version = event.data.get("data").get("current_item").get("media_item").get("version")
+                        if version != "":
+                            self._media_title = self._media_title + " (" + version + ")"
                     except (ValueError, KeyError):
                         try:
                             self._media_title = event.data.get("data").get("current_item").get("name")
@@ -1820,10 +1831,17 @@ class LinkPlayDevice(MediaPlayerEntity):
                             self._media_title = None
 
                     try:
-                        self._media_artist = event.data.get("data").get("current_item").get("media_item").get("album").get("artist").get("name")
+                        artists = len(event.data.get("data").get("current_item").get("media_item").get("artists"))
+                        cnt = 0
+                        self._media_artist = ""
+                        for artist in event.data.get("data").get("current_item").get("media_item").get("artists"):
+                            self._media_artist = self._media_artist + artist.get("name")
+                            cnt = cnt + 1
+                            if cnt < artists:
+                                self._media_artist = self._media_artist + " / "
                     except (ValueError, KeyError):
                         try:
-                            self._media_artist = event.data.get("data").get("current_item").get("media_item").get("artists")[0].get("name")
+                            self._media_artist = event.data.get("data").get("current_item").get("media_item").get("album").get("artist").get("name")
                         except (ValueError, KeyError):
                             self._media_artist = None
 
