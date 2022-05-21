@@ -133,6 +133,7 @@ MAX_VOL = 100
 FW_MROOM_RTR_MIN = '4.2.8020'
 FW_RAKOIT_UART_MIN = '4.2.9326'
 FW_SLOW_STREAMS = '4.6'
+FW_PLAYPROMPT_MIN = '4.6.415145'
 ROOTDIR_USB = '/media/sda1/'
 UUID_ARYLIC = 'FF31F09E'
 TCPPORT = 8899
@@ -1195,28 +1196,34 @@ class LinkPlayDevice(MediaPlayerEntity):
     async def async_media_next_track(self):
         """Send media_next command to media player."""
         if not self._slave_mode:
-            value = await self.call_linkplay_httpapi("setPlayerCmd:next", None)
-            self._playhead_position = 0
-            self._duration = 0
-            self._position_updated_at = utcnow()
-            self._trackc = None
-            self._wait_for_mcu = 2
-            if value != "OK":
-                _LOGGER.warning("Failed skip to next track. Device: %s, Got response: %s", self.entity_id, value)
+            if not self._playing_mass:
+                value = await self.call_linkplay_httpapi("setPlayerCmd:next", None)
+                self._playhead_position = 0
+                self._duration = 0
+                self._position_updated_at = utcnow()
+                self._trackc = None
+                self._wait_for_mcu = 2
+                if value != "OK":
+                    _LOGGER.warning("Failed skip to next track. Device: %s, Got response: %s", self.entity_id, value)
+            else:
+                await self.hass.services.async_call("mass","queue_command", service_data = {"entity_id": self.entity_id, "command": "next"})
         else:
             await self._master.async_media_next_track()
 
     async def async_media_previous_track(self):
         """Send media_previous command to media player."""
         if not self._slave_mode:
-            value = await self.call_linkplay_httpapi("setPlayerCmd:prev", None)
-            self._playhead_position = 0
-            self._duration = 0
-            self._position_updated_at = utcnow()
-            self._trackc = None
-            self._wait_for_mcu = 2
-            if value != "OK":
-                _LOGGER.warning("Failed to skip to previous track." " Device: %s, Got response: %s", self.entity_id, value)
+            if not self._playing_mass:
+                value = await self.call_linkplay_httpapi("setPlayerCmd:prev", None)
+                self._playhead_position = 0
+                self._duration = 0
+                self._position_updated_at = utcnow()
+                self._trackc = None
+                self._wait_for_mcu = 2
+                if value != "OK":
+                    _LOGGER.warning("Failed to skip to previous track." " Device: %s, Got response: %s", self.entity_id, value)
+            else:
+                await self.hass.services.async_call("mass","queue_command", service_data = {"entity_id": self.entity_id, "command": "previous"})
         else:
             await self._master.async_media_previous_track()
 
