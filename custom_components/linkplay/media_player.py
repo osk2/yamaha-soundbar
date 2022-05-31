@@ -370,6 +370,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._playing_tts = False
         self._playing_mediabrowser = False
         self._playing_mass = False
+        self._playing_mass_radio = False
         self._slave_list = None
         self._multiroom_wifidirect = multiroom_wifidirect
         self._multiroom_group = []
@@ -682,7 +683,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 if self._state in [STATE_PLAYING, STATE_PAUSED]:
                     self._duration = int(int(self._player_statdata['totlen']) / 1000)
                     self._playhead_position = int(int(self._player_statdata['curpos']) / 1000)
-                    _LOGGER.debug("04 Update DUR, POS %s, %s, %s, %s, %s", self.entity_id, self._name, self._state, self._duration, self._playhead_position)
+                    #_LOGGER.debug("04 Update DUR, POS %s, %s, %s, %s, %s", self.entity_id, self._name, self._state, self._duration, self._playhead_position)
                 else:
                     self._duration = 0
                     self._playhead_position = 0
@@ -988,7 +989,9 @@ class LinkPlayDevice(MediaPlayerEntity):
                 SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | SUPPORT_GROUPING | SUPPORT_BROWSE_MEDIA | \
                 SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
                 SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE | \
-                SUPPORT_NEXT_TRACK | SUPPORT_PREVIOUS_TRACK | SUPPORT_SHUFFLE_SET | SUPPORT_REPEAT_SET | SUPPORT_SEEK
+                SUPPORT_NEXT_TRACK | SUPPORT_PREVIOUS_TRACK | SUPPORT_SHUFFLE_SET | SUPPORT_REPEAT_SET 
+                if not self._playing_mass_radio:
+                    self._features |=  SUPPORT_SEEK
             else:
                 self._features = \
                 SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | SUPPORT_GROUPING | SUPPORT_BROWSE_MEDIA | \
@@ -1372,7 +1375,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._nometa = False
 
             if media_source.is_media_source_id(media_id):
-                play_item = await media_source.async_resolve_media(self.hass, media_id)
+                play_item = await media_source.async_resolve_media(self.hass, media_id, self.entity_id)
                 if media_id.find('radio_browser') != -1:  # radios are an exception, be treated by server redirect checker and icecast metadata parser
                     self._playing_mediabrowser = False
                 else:
@@ -1805,12 +1808,11 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._media_image_url = coverart_url
 
     def get_music_assistant_metadata(self, event):
-        radio = False
         if self._state in [STATE_PLAYING, STATE_PAUSED]:
-            if event.data.get("type") == "queue updated":
+            if event.data.get("type") == "queue_updated":
 
                 if event.data.get("data").get("current_item").get("media_type") == "radio":
-                    radio = True
+                    self._playing_mass_radio = True
                     try:
                         self._media_title = event.data.get("data").get("current_item").get("name")
                     except (ValueError, KeyError):
@@ -1825,7 +1827,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._duration = 0
                     self._playhead_position = 0
                 else:
-                    radio = False
+                    self._playing_mass_radio = False
                     try:
                         self._media_title = event.data.get("data").get("current_item").get("media_item").get("name") 
                         version = event.data.get("data").get("current_item").get("media_item").get("version")
@@ -1862,8 +1864,8 @@ class LinkPlayDevice(MediaPlayerEntity):
                     except (ValueError, KeyError):
                         self._duration = 0
 
-            elif event.data.get("type") == "queue time updated":
-                if not radio:
+            elif event.data.get("type") == "queue_time_updated":
+                if not self._playing_mass_radio:
                     try:
                         self._playhead_position = event.data.get("data")
                     except (ValueError, KeyError):
