@@ -1370,18 +1370,6 @@ class LinkPlayDevice(MediaPlayerEntity):
         _LOGGER.debug("Trying to play media. Device: %s, Media_type: %s, Media_id: %s", self.entity_id, media_type, media_id)
         if not self._slave_mode:
 
-            if kwargs.get(ATTR_MEDIA_ANNOUNCE):
-                self._announce = True
-                await self.async_snapshot(True)
-
-                volume = int(self._volume) + int(DEFAULT_ANNOUNCE_VOLUME_INCREASE)
-                if volume > 100:
-                    volume = 100
-
-                value = await self.call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
-                if value == "OK":
-                    self._volume = volume
-
             if not (media_type in [MEDIA_TYPE_MUSIC, MEDIA_TYPE_URL, MEDIA_TYPE_TRACK] or media_source.is_media_source_id(media_id)):
                 _LOGGER.warning("For: %s Invalid media type %s. Only %s and %s is supported", self._name, media_type, MEDIA_TYPE_MUSIC, MEDIA_TYPE_URL)
                 await self.async_media_stop()
@@ -1390,6 +1378,19 @@ class LinkPlayDevice(MediaPlayerEntity):
             if not self._snapshot_active:
                 self._playing_mediabrowser = False
                 self._nometa = False
+
+            if kwargs.get(ATTR_MEDIA_ANNOUNCE):
+                self._announce = True
+                self._playing_tts = True
+                await self.async_snapshot(False)
+                volume = int(self._volume) + int(DEFAULT_ANNOUNCE_VOLUME_INCREASE)
+                if volume > 100:
+                    volume = 100
+                self._playing_mediabrowser = False
+                self._playing_mass = False
+            else:
+                self._playing_tts = False
+                self._announce = False
 
             if media_source.is_media_source_id(media_id):
                 play_item = await media_source.async_resolve_media(self.hass, media_id, self.entity_id)
@@ -1475,14 +1476,6 @@ class LinkPlayDevice(MediaPlayerEntity):
                     return False
 
             self._state = STATE_PLAYING
-            if media_id.find('tts_proxy') != -1:
-                #_LOGGER.debug("Setting TTS: %s, %s", self.entity_id, self._name)
-                self._playing_tts = True
-                self._playing_mediabrowser = False
-                self._playing_mass = False
-                self._playing_stream = False
-            else:
-                self._playing_tts = False
             self._media_title = None
             self._media_artist = None
             self._media_album = None
@@ -1502,6 +1495,13 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._media_uri = None
                 self._media_uri_final = None
                 self._wait_for_mcu = 0.4
+            if self._announce:
+                self._playing_stream = False
+                await asyncio.sleep(.6)
+                value = await self.call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
+                if value == "OK":
+                    self._volume = volume
+
             return True
 
         else:
@@ -2086,7 +2086,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         #_LOGGER.debug('For: %s stated media_artist: %s', self._name, self._media_artist)
         
     async def async_detect_stream_url_redirection(self, uri):
-        if uri.find('tts_proxy') != -1: # skip redirect check for local TTS streams
+        if uri.find('tts_proxy') != -1 or self._announce: # skip redirect check for local TTS streams
             return uri
         _LOGGER.debug('For: %s detect URI redirect-from:   %s', self._name, uri)
         redirect_detect = True
@@ -2603,9 +2603,11 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._snap_volume = 0
             else:
                 self._snap_volume = int(self._volume)
-                if self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_SLOW_STREAMS):
-                    await self.call_linkplay_httpapi("setPlayerCmd:pause", None)
-                await self.call_linkplay_httpapi("setPlayerCmd:stop", None)
+                if self._playing_stream:
+                    if self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_SLOW_STREAMS):
+                        await self.call_linkplay_httpapi("setPlayerCmd:pause", None)
+                    else:
+                        await self.call_linkplay_httpapi("setPlayerCmd:stop", None)
         else:
             return
             #await self._master.async_snapshot(switchinput)
@@ -2620,12 +2622,6 @@ class LinkPlayDevice(MediaPlayerEntity):
             _LOGGER.debug("Player %s current source: %s, restoring volume: %s, source: %s uri: %s, seek: %s, pos: %s", self.name, self._source, self._snap_volume, self._snap_source, self._snap_uri, self._snap_seek, self._snap_playhead_position)
             if self._snap_state != STATE_UNKNOWN:
                 self._state = self._snap_state
-
-            if self._snap_volume != 0:
-                await self.call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(self._snap_volume)), None)
-                self._snap_volume = 0
-
-                # await asyncio.sleep(.6)
 
             self._playing_tts = False
             self._announce = False
@@ -2642,6 +2638,8 @@ class LinkPlayDevice(MediaPlayerEntity):
             elif self._snap_source != "Network":
                 self._snapshot_active = False
                 await self.async_select_source(self._snap_source)
+                if self._snap_uri is None:
+                    await asyncio.sleep(.6)
                 self._snap_source = None
             
             elif self._snap_uri is not None:
@@ -2653,6 +2651,10 @@ class LinkPlayDevice(MediaPlayerEntity):
                     await self.async_play_media(MEDIA_TYPE_URL, self._media_uri)
                 self._snapshot_active = False
                 self._snap_uri = None
+
+            if self._snap_volume != 0:
+                await self.call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(self._snap_volume)), None)
+                self._snap_volume = 0
 
             if self._snap_state in [STATE_PLAYING, STATE_PAUSED]:
                 await asyncio.sleep(0.5)
