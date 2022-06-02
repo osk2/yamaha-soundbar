@@ -50,6 +50,7 @@ from homeassistant.components.media_player.browse_media import (
 from homeassistant.components.media_player.const import (
     ATTR_GROUP_MEMBERS,
     ATTR_MEDIA_CONTENT_ID,
+    ATTR_MEDIA_ANNOUNCE,
     MEDIA_TYPE_MUSIC,
     MEDIA_TYPE_URL,
     MEDIA_TYPE_TRACK,
@@ -126,6 +127,7 @@ DEFAULT_ICECAST_UPDATE = 'StationName'
 DEFAULT_MULTIROOM_WIFIDIRECT = False
 DEFAULT_LEDOFF = False
 DEFAULT_VOLUME_STEP = 5
+DEFAULT_ANNOUNCE_VOLUME_INCREASE = 15
 
 DEBUGSTR_ATTR = True
 LASTFM_API_BASE = 'http://ws.audioscrobbler.com/2.0/?method='
@@ -371,6 +373,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._playing_mediabrowser = False
         self._playing_mass = False
         self._playing_mass_radio = False
+        self._announce = False
         self._slave_list = None
         self._multiroom_wifidirect = multiroom_wifidirect
         self._multiroom_group = []
@@ -799,6 +802,8 @@ class LinkPlayDevice(MediaPlayerEntity):
                     self._media_image_url = None
                     self._icecast_name = None
                     self._playing_tts = False
+                    if self._announce:
+                        await self.async_restore()
 
                 if self._playing_localfile and self._state in [STATE_PLAYING, STATE_PAUSED] and not self._playing_tts and not self._playing_mass:
                     #_LOGGER.debug("10 Update async_get_playerstatus_metadata FILE %s, %s", self.entity_id, self._name)
@@ -909,7 +914,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     def icon(self):
         """Return the icon of the device."""
 
-        if self._playing_tts:
+        if self._playing_tts or self._announce:
             return ICON_TTS
 
         if self._state in [STATE_PAUSED, STATE_UNAVAILABLE, STATE_IDLE, STATE_UNKNOWN]:
@@ -1364,6 +1369,18 @@ class LinkPlayDevice(MediaPlayerEntity):
         """Play media from a URL or localfile."""
         _LOGGER.debug("Trying to play media. Device: %s, Media_type: %s, Media_id: %s", self.entity_id, media_type, media_id)
         if not self._slave_mode:
+
+            if kwargs.get(ATTR_MEDIA_ANNOUNCE):
+                self._announce = True
+                await self.async_snapshot(True)
+
+                volume = int(self._volume) + int(DEFAULT_ANNOUNCE_VOLUME_INCREASE)
+                if volume > 100:
+                    volume = 100
+
+                value = await self.call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
+                if value == "OK":
+                    self._volume = volume
 
             if not (media_type in [MEDIA_TYPE_MUSIC, MEDIA_TYPE_URL, MEDIA_TYPE_TRACK] or media_source.is_media_source_id(media_id)):
                 _LOGGER.warning("For: %s Invalid media type %s. Only %s and %s is supported", self._name, media_type, MEDIA_TYPE_MUSIC, MEDIA_TYPE_URL)
@@ -2611,6 +2628,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 # await asyncio.sleep(.6)
 
             self._playing_tts = False
+            self._announce = False
             self._playhead_position = self._snap_playhead_position
 
             if self._snap_spotify:
