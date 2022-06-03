@@ -1,6 +1,6 @@
 # Linkplay-based speakers and sound devices
 
-This component allows you to integrate control of audio devices based on Linkplay chipset into your [Home Assistant](http://www.home-assistant.io) smart home system. Originally developed by nicjo814, maintained by limych. This version rewritten by nagyrobi. Read more about Linkplay at the bottom of this file.
+This component allows you to integrate control of audio devices based on Linkplay A31 chipset into your [Home Assistant](http://www.home-assistant.io) smart home system. Originally developed by nicjo814, maintained by limych. This version rewritten by nagyrobi. Read more about Linkplay at the bottom of this file.
 
 Fully compatible with [Mini Media Player card for Lovelace UI](https://github.com/kalkih/mini-media-player) by kalkih, including speaker group management.
 
@@ -146,32 +146,6 @@ It's also possible to use Home Assistant's [standard multiroom](https://www.home
 
 *Tip*: if you experience temporary `Unavailable` status on the slaves afer unjoining from a multiroom group in router mode, run once the Linkplay-specific command `RouterMultiroomEnable` - see details further down.
 
-## Snapshot and restore
-
-To prepare the player to play TTS and save the current state of it for restoring afterwards, current playback will stop:
-```yaml
-    - service: linkplay.snapshot
-      data:
-        entity_id: media_player.sound_room1
-        switchinput: true
-```
-Note the `switchinput` parameter: if the currently playing source is Spotify and this parameter is `True`, it will only save the current volume of the player. You can use Home Assistant's Spotify integration to pause playback within an automation (read further below). If it's `False`, it will save the current Spotify playlist to the player's preset memory. With other playback sources (like Line-In), it will only switch to network playback.
-
-To restore the player state:
-```yaml
-    - service: linkplay.restore
-      data:
-        entity_id: media_player.sound_room1
-```
-You can specify multiple entity ids separated by comma or use `all` to run the service against. Currently the following state is being snapshotted/restored:
-- Volume
-- Input source
-- Webradio stream (as long as it's configured as an input source)
-- USB audio files playback (track will restart from the beginning)
-- Spotify: If the snapshot was taken with `switchinput` as `False`, it will recall the playlist, but playback may restart the same track or not, depends on Spotify settings. With `switchinput` as `True` it will do nothing, but you can resume playback from the Spotify integration in an automation (see example below).
-
-If you experience TTS audio being cut off at the beginning, this is because the player needs some time to switch to playing out the stream. The only good solution for this is to add a configurable amount of silence at the beginning of the audio stream, I've modified [Google Translate](https://github.com/nagyrobi/home-assistant-custom-components-google_translate) and [VoiceRSS](https://github.com/nagyrobi/home-assistant-custom-components-voicerss) to do this, they can be installed manually as custom components ([even through HACS, manually](https://hacs.xyz/docs/faq/custom_repositories)). Linkplay modules seem to need about `800`ms of silence at the beginning of the stream in order for the first soundbits not to be cut down from the speech.
-
 ## Presets
 
 Linkplay devices allow to save, using the control app on the phone/tablet, music presets (for example Spotify playlists) to be recalled for later listening. Recalling a preset from Home Assistant:
@@ -205,6 +179,33 @@ Implemented commands:
 
 If parameter `notify: False` is omitted, results will appear in Lovelace UI's left pane as persistent notifications which can be dismissed. You can specify multiple entity ids separated by comma or use `all` to run the service against.
 
+## Snapshot and restore
+
+These functions are useless since Home Assistant 2022.6 because this component has support for announcements so it does the snapshot and the restore automatically for any TTS message coming in.
+See below on how to call a TTS announcement service.
+
+To prepare the player to play TTS and save the current state of it for restoring afterwards, current playback will stop:
+```yaml
+    - service: linkplay.snapshot
+      data:
+        entity_id: media_player.sound_room1
+        switchinput: true
+```
+Note the `switchinput` parameter: if the currently playing source is Spotify and this parameter is `True`, it will only save the current volume of the player. You can use Home Assistant's Spotify integration to pause playback within an automation (read further below). If it's `False`, it will save the current Spotify playlist to the player's preset memory. With other playback sources (like Line-In), it will only switch to network playback.
+
+To restore the player state:
+```yaml
+    - service: linkplay.restore
+      data:
+        entity_id: media_player.sound_room1
+```
+You can specify multiple entity ids separated by comma or use `all` to run the service against. Currently the following state is being snapshotted/restored:
+- Volume
+- Input source
+- Webradio stream (as long as it's configured as an input source)
+- USB audio files playback (track will restart from the beginning)
+- Spotify: If the snapshot was taken with `switchinput` as `False`, it will recall the playlist, but playback may restart the same track or not, depends on Spotify settings. With `switchinput` as `True` it will do nothing, but you can resume playback from the Spotify integration in an automation (see example below).
+
 ## Service call examples
 
 Play a sound file located on an http server or a webradio stream:
@@ -225,125 +226,17 @@ Play the first sound file located on the local storage directly attached to the 
         media_content_type: music
 ```
 
-## Automation examples
-
-Intrerupt playback of a source, incrase volume by 15%, say a TTS message and resume playback when TTS finishes. Note that to have Spotify correctly paused and resumed, it needs to have the Spotify integration also installed in the system with a Premium account. The template renders the `entity_id` of the Spotify instance playing on the actual Liknkplay device.
-
+Play a TTS (text-to-speech) announcement:
 ```yaml
-- alias: 'Notify by TTS that Hanna has arrived Sound Room 1'
-  id: tts_mary_home_sound_room1
-  trigger:
-    - platform: state
-      entity_id: person.hanna
-      to: 'home'
-  action:
-  - choose:
-    - conditions:
-      - condition: state
-        entity_id: media_player.sound_room1
-        attribute: source
-        state: 'Spotify'
-      sequence:
-      - service: media_player.media_pause
-        target:
-          entity_id: >
-            {{ 
-              expand(states.media_player) 
-              |selectattr('state', 'eq', 'playing')
-              |selectattr('attributes.source', 'eq', state_attr('media_player.sound_room1', 'friendly_name'))
-              |map(attribute='entity_id')
-              |join
-            }}
-      - service: linkplay.snapshot
-        data:
-          entity_id: media_player.sound_room1
-          switchinput: true
-      - service: media_player.volume_set
-        data:
-          entity_id: media_player.sound_room1
-          volume_level: >
-            {% set vol = state_attr('media_player.sound_room1', 'volume_level') %}
-            {% if vol < 0.85 %}
-            {{ vol + 0.15 }}
-            {% else %}
-            {{ vol }}
-            {% endif %}
       - service: tts.google_translate_say
         data:
           entity_id: media_player.sound_room1
           message: "Hanna has arrived home."
           language: en
-    default:
-    - service: linkplay.snapshot
-      data:
-        entity_id: media_player.sound_room1
-    - service: media_player.volume_set
-      data:
-        entity_id: media_player.sound_room1
-        volume_level: >
-            {% set vol = state_attr('media_player.sound_room1', 'volume_level') %}
-            {% if vol < 0.85 %}
-            {{ vol + 0.15 }}
-            {% else %}
-            {{ vol }}
-            {% endif %}
-    - service: tts.google_translate_say
-      data:
-        entity_id: media_player.sound_room1
-        message: "Hanna has arrived home."
-        language: en
-
-- alias: 'Restore state after TTS for snapshotted players'
-  id: tts_restore_from_snapshot
-  trigger:
-    - platform: state
-      entity_id: 
-        - media_player.sound_room1
-        - media_player.sound_room2
-      attribute: tts_active
-      to: false
-  condition:
-    - condition: template
-      value_template: >
-        {{ trigger.to_state.attributes.snapshot_active }}
-  action:
-  - choose:
-    - conditions:
-        condition: and
-        conditions:
-        - condition: template
-          value_template: >
-            {{ trigger.to_state.attributes.snapshot_spotify }}
-        - condition: template
-          value_template: >
-            {{ 
-              (expand(states.media_player) 
-              |selectattr('state', 'eq', 'paused')
-              |selectattr('attributes.source', 'eq', trigger.to_state.attributes.friendly_name)
-              |map(attribute='entity_id')
-              |list|count) > 0
-            }}
-      sequence:
-      - service: linkplay.restore
-        data:
-          entity_id: "{{ trigger.entity_id }}"
-      - service: media_player.media_play_pause
-        target:
-          entity_id: >
-            {{ 
-              expand(states.media_player) 
-              |selectattr('state', 'eq', 'paused')
-              |selectattr('attributes.source', 'eq', trigger.to_state.attributes.friendly_name)
-              |map(attribute='entity_id')
-              |join
-            }}
-    default:
-    - service: linkplay.restore
-      data:
-        entity_id: "{{ trigger.entity_id }}"
 ```
-No need for any delays in the automations. Trigger on attribute `tts_active` goes _false_ when the player finishes playing the TTS stream, and if `snapshot_active` is _true_ means that snapshot exists and can be restored. Also resumes Spotify playback if that's the case.
+If you experience that the announcement audio is cut off at the beginning, this happens because the player hardware needs some time to switch to playing out the stream. The only good solution for this is to add a configurable amount of silence at the beginning of the audio stream, I've modified [Google Translate](https://github.com/nagyrobi/home-assistant-custom-components-google_translate) and [VoiceRSS](https://github.com/nagyrobi/home-assistant-custom-components-voicerss) to do this, they can be installed manually as custom components ([even through HACS, manually](https://hacs.xyz/docs/faq/custom_repositories)). Linkplay modules seem to need about `800`ms of silence at the beginning of the stream in order for the first soundbits not to be cut down from the speech.
 
+## Automation examples
 
 Select an input and set volume and unmute via an automation:
 ```yaml
@@ -372,7 +265,7 @@ Note that you have to specify source names as you've set them in the configurati
 ## About Linkplay
 
 Linkplay is a smart audio chipset and module manufacturer. Their various module types share the same functionality across the whole platform and alow for native audio content playback from lots of sources, including local inputs, local files, Bluetooth, DNLA, Airplay and also web-based services like Icecast, Spotify, Tune-In, Deezer, Tidal etc. They allow setting up multiroom listening environments using either self-created wireless connections or relying on existing network infrastructure, for longer distances coverage. For more information visit https://linkplay.com/.
-There are quite a few manufacturers and devices that operate on the basis of Linkplay platform. Here are just some examples of the brands and models:
+There are quite a few manufacturers and devices that operate on the basis of Linkplay platform. Here are just some examples of the brands and models with A31 chipset:
 - **Arylic** (S50Pro, A50, Up2Stream),
 - **August** (WS300G),
 - **Audio Pro** (A10, A26, A36, A40, Addon C3/C5/C5A/C10/C-SUB, D-1, Drumfire, Link 1),
