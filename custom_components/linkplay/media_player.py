@@ -9,6 +9,7 @@ import asyncio
 from asyncio import CancelledError
 import async_timeout
 import voluptuous as vol
+import os
 
 from datetime import timedelta
 import logging
@@ -17,6 +18,7 @@ from json import loads, dumps
 import binascii
 import urllib.request
 import string
+import ssl
 import aiohttp
 from http import HTTPStatus
 from aiohttp.client_exceptions import ClientError
@@ -32,7 +34,10 @@ import chardet
 
 from homeassistant.util import Throttle
 from homeassistant.util.dt import utcnow
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import (
+    async_get_clientsession,
+    async_create_clientsession,
+)
 import homeassistant.helpers.config_validation as cv
 
 from homeassistant.components.media_player import (
@@ -123,6 +128,7 @@ CONF_VOLUME_STEP = 'volume_step'
 CONF_LEDOFF = 'led_off'
 CONF_UUID = 'uuid'
 CONF_ANNOUNCE_VOLUME_INCREASE = 'announce_volume_increase'
+CONF_CERT_FILENAME = 'client.pem'
 
 DEFAULT_ICECAST_UPDATE = 'StationName'
 DEFAULT_MULTIROOM_WIFIDIRECT = False
@@ -241,10 +247,15 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
     state = STATE_IDLE
 
-    initurl = "http://{0}/httpapi.asp?command=getStatus".format(host)
-    
+    initurl = "https://{0}/httpapi.asp?command=getStatusEx".format(host)
+    dirname = os.path.dirname(__file__)
+    certpath = os.path.join(dirname, CONF_CERT_FILENAME)
+    ssl_ctx = ssl.create_efault_context(purpose=ssl.Purpose.CLIENT_AUTH)
+    ssl_ctx.load_cert_chain(certfile=certpath)
+    conn = aiohttp.TCPConnector(ssl_context=ssl_ctx)
+
     try:
-        websession = async_get_clientsession(hass)
+        websession = aiohttp.ClientSession(connector=conn)
         response = await websession.get(initurl)
 
         if response.status == HTTPStatus.OK:
@@ -418,15 +429,20 @@ class LinkPlayDevice(MediaPlayerEntity):
            
     async def async_call_linkplay_httpapi(self, cmd, jsn):
         """Get the latest data from HTTPAPI service."""
-        url = "http://{0}/httpapi.asp?command={1}".format(self._host, cmd)
-        
+        url = "https://{0}/httpapi.asp?command={1}".format(self._host, cmd)
+
         if self._first_update:
             timeout = 10
         else:
             timeout = API_TIMEOUT
         
         try:
-            websession = async_get_clientsession(self.hass)
+            dirname = os.path.dirname(__file__)
+            certpath = os.path.join(dirname, CONF_CERT_FILENAME)
+            ssl_ctx = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
+            ssl_ctx.load_cert_chain(certfile=certpath)
+            conn = aiohttp.TCPConnector(ssl_context=ssl_ctx)
+            websession = aiohttp.ClientSession(connector=conn)
             async with async_timeout.timeout(timeout):
                 response = await websession.get(url)
 
@@ -567,7 +583,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._unav_throttle = False
             if self._first_update or (self._state == STATE_UNAVAILABLE or self._multiroom_wifidirect):
                 #_LOGGER.debug("03 Update first time getStatus %s, %s", self.entity_id, self._name)
-                device_status = await self.async_call_linkplay_httpapi("getStatus", True)
+                device_status = await self.async_call_linkplay_httpapi("getStatusEx", True)
                 if device_status is not None:
                     if isinstance(device_status, dict):
                         if self._state == STATE_UNAVAILABLE:
