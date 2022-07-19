@@ -250,7 +250,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     initurl = "https://{0}/httpapi.asp?command=getStatusEx".format(host)
     dirname = os.path.dirname(__file__)
     certpath = os.path.join(dirname, CONF_CERT_FILENAME)
-    ssl_ctx = ssl.create_efault_context(purpose=ssl.Purpose.CLIENT_AUTH)
+    ssl_ctx = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
     ssl_ctx.load_cert_chain(certfile=certpath)
     conn = aiohttp.TCPConnector(ssl_context=ssl_ctx)
 
@@ -286,6 +286,9 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
             "Failed communicating with LinkPlayDevice (start) '%s': uuid: %s %s", host, uuid, type(error)
         )
         state = STATE_UNAVAILABLE
+
+    finally:
+        await websession.close()
 
     linkplay = LinkPlayDevice(name,
                             host,
@@ -451,6 +454,9 @@ class LinkPlayDevice(MediaPlayerEntity):
                 "Failed async communicating with LinkPlayDevice (httpapi) '%s': %s", self._name, type(error)
             )
             return False
+
+        finally:
+          await websession.close()
 
         if response.status == HTTPStatus.OK:
             if jsn:
@@ -876,51 +882,6 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         else:
             _LOGGER.error("Erroneous JSON during update and process self._player_statdata: %s, %s", self.entity_id, self._name)
-
-
-        # Get multiroom slave information #
-
-        slave_list = await self.async_call_linkplay_httpapi("multiroom:getSlaveList", True)
-        if slave_list is None:
-            self._is_master = False
-            self._slave_list = None
-            self._multiroom_group = []
-            return True
-
-        self._slave_list = []
-        self._multiroom_group = []
-        if isinstance(slave_list, dict):
-            if int(slave_list['slaves']) > 0:
-                self._multiroom_group.append(self.entity_id)
-                self._is_master = True
-                for slave in slave_list['slave_list']:
-                    for device in self.hass.data[DOMAIN].entities:
-                        if device._name == slave['name']:
-                            self._multiroom_group.append(device.entity_id)
-                            await device.async_set_master(self)
-                            await device.async_set_is_master(False)
-                            await device.async_set_slave_mode(True)
-                            await device.async_set_media_title(self._media_title)
-                            await device.async_set_media_artist(self._media_artist)
-                            await device.async_set_volume(slave['volume'])
-                            #await device.async_set_muted(slave['mute'])
-                            await device.async_set_state(self.state)
-                            await device.async_set_slave_ip(slave['ip'])
-                            await device.async_set_media_image_url(self._media_image_url)
-                            await device.async_set_playhead_position(self.media_position)
-                            await device.async_set_duration(self.media_duration)
-                            await device.async_set_position_updated_at(self.media_position_updated_at)
-                            await device.async_set_source(self._source)
-                            await device.async_set_sound_mode(self._sound_mode)
-                            await device.async_set_features(self._features)
-
-                    for slave in slave_list['slave_list']:
-                        for device in self.hass.data[DOMAIN].entities:
-                            if device.entity_id in self._multiroom_group:
-                                await device.async_set_multiroom_group(self._multiroom_group)
-
-        else:
-            _LOGGER.debug("Erroneous JSON during slave list parsing and processing: %s, %s", self.entity_id, self._name)
 
         return True
 
@@ -1653,25 +1614,10 @@ class LinkPlayDevice(MediaPlayerEntity):
         if volume > 100:
             volume = 100
 
-        if not (self._slave_mode and self._multiroom_wifidirect):
+        value = await self.async_call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
 
-            if self._is_master:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:slave_vol:{0}".format(str(volume)), None)
-            else:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
-
-            if value == "OK":
-                self._volume = volume
-            else:
-                _LOGGER.warning("Failed to set volume_up. Device: %s, Got response: %s", self.entity_id, value)
-        else:
-            if self._snapshot_active:
-                return
-            value = await self._master.async_call_linkplay_httpapi("multiroom:SlaveVolume:{0}:{1}".format(self._slave_ip, str(volume)), None)
-            if value == "OK":
-                self._volume = volume
-            else:
-                _LOGGER.warning("Failed to set volume_up. Device: %s, Got response: %s", self.entity_id, value)
+        if value == "OK":
+            self._volume = volume
 
     async def async_volume_down(self):
         """Decrease volume one step."""
@@ -1682,68 +1628,25 @@ class LinkPlayDevice(MediaPlayerEntity):
         if volume < 0:
             volume = 0
 
-        if not (self._slave_mode and self._multiroom_wifidirect):
+        value = await self.async_call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
 
-            if self._is_master:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:slave_vol:{0}".format(str(volume)), None)
-            else:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
-
-            if value == "OK":
-                self._volume = volume
-            else:
-                _LOGGER.warning("Failed to set volume_down. Device: %s, Got response: %s", self.entity_id, value)
-        else:
-            if self._snapshot_active:
-                return
-            value = await self._master.async_call_linkplay_httpapi("multiroom:SlaveVolume:{0}:{1}".format(self._slave_ip, str(volume)), None)
-            if value == "OK":
-                self._volume = volume
-            else:
-                _LOGGER.warning("Failed to set volume_down. Device: %s, Got response: %s", self.entity_id, value)
+        if value == "OK":
+            self._volume = volume
 
     async def async_set_volume_level(self, volume):
         """Set volume level, input range 0..1, linkplay device 0..100."""
         volume = str(round(int(volume * MAX_VOL)))
-        if not (self._slave_mode and self._multiroom_wifidirect):
-            if self._is_master:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:slave_vol:{0}".format(str(volume)), None)
-            else:
-                if self._snapshot_active:
-                    await asyncio.sleep(1)
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
+        value = await self.async_call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
 
-            if value == "OK":
-                self._volume = volume
-            else:
-                _LOGGER.warning("Failed to set volume. Device: %s, Got response: %s", self.entity_id, value)
-        else:
-            if self._snapshot_active:
-                return
-            value = await self._master.async_call_linkplay_httpapi("multiroom:SlaveVolume:{0}:{1}".format(self._slave_ip, str(volume)), None)
-            if value == "OK":
-                self._volume = volume
-            else:
-                _LOGGER.warning("Failed to set volume. Device: %s, Got response: %s", self.entity_id, value)
+        if value == "OK":
+            self._volume = volume
 
     async def async_mute_volume(self, mute):
         """Mute (true) or unmute (false) media player."""
-        if not (self._slave_mode and self._multiroom_wifidirect):
-            if self._is_master:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:slave_mute:{0}".format(str(int(mute))), None)
-            else:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:mute:{0}".format(str(int(mute))), None)
+        value = await self.async_call_linkplay_httpapi("setPlayerCmd:mute:{0}".format(str(int(mute))), None)
 
-            if value == "OK":
-                self._muted = bool(int(mute))
-            else:
-                _LOGGER.warning("Failed mute/unmute volume. Device: %s, Got response: %s", self.entity_id, value)
-        else:
-            value = await self._master.async_call_linkplay_httpapi("multiroom:SlaveVolume:{0}:{1}".format(self._slave_ip, str(int(mute))), None)
-            if value == "OK":
-                self._muted = bool(int(mute))
-            else:
-                _LOGGER.warning("Failed mute/unmute volume. Device: %s, Got response: %s", self.entity_id, value)
+        if value == "OK":
+            self._muted = bool(int(mute))
 
     async def async_turn_on(self):
         """Use Mune/Unmute instead, because power is not supported."""
