@@ -250,8 +250,10 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     initurl = "https://{0}/httpapi.asp?command=getStatusEx".format(host)
     dirname = os.path.dirname(__file__)
     certpath = os.path.join(dirname, CONF_CERT_FILENAME)
-    ssl_ctx = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
+    ssl_ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
     ssl_ctx.load_cert_chain(certfile=certpath)
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
     conn = aiohttp.TCPConnector(ssl_context=ssl_ctx)
 
     try:
@@ -442,8 +444,10 @@ class LinkPlayDevice(MediaPlayerEntity):
         try:
             dirname = os.path.dirname(__file__)
             certpath = os.path.join(dirname, CONF_CERT_FILENAME)
-            ssl_ctx = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
+            ssl_ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
             ssl_ctx.load_cert_chain(certfile=certpath)
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
             conn = aiohttp.TCPConnector(ssl_context=ssl_ctx)
             websession = aiohttp.ClientSession(connector=conn)
             async with async_timeout.timeout(timeout):
