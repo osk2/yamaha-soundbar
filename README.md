@@ -1,14 +1,12 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 
-# YAHAMA soundbar
+# Yamaha Soundbar
 
-```
-This component is under heavy development and expect some major changes in the future.
-```
+> ⚠️ This component is under heavy development and expect some major changes in the future.
 
-This component allows you to control YAHAMA soundbar.
+This component allows you to control Yamaha soundbar.
 
-Tested on YAHAMA YAS-209, any YAMAHA soundbar based on Linkplay A118 should be supported as well.
+Tested on Yamaha YAS-209, any Yamaha soundbar based on Linkplay A118 should be supported as well.
 
 The repo is forked from [nagyrobi/home-assistant-custom-components-linkplay](https://github.com/nagyrobi/home-assistant-custom-components-linkplay)
 
