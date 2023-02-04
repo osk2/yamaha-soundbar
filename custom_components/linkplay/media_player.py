@@ -460,7 +460,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             return False
 
         finally:
-          await websession.close()
+            await websession.close()
 
         if response.status == HTTPStatus.OK:
             if jsn:
@@ -2734,12 +2734,12 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         trackq = []
         for playlist in xml_tree:
-           for tracks in playlist:
-               for track in tracks:
-                   if track.tag == 'URL':
-                       if rootdir in track.text:
-                           tracku = track.text.replace(rootdir, '')
-                           trackq.append(tracku)
+            for tracks in playlist:
+                for track in tracks:
+                    if track.tag == 'URL':
+                        if rootdir in track.text:
+                            tracku = track.text.replace(rootdir, '')
+                            trackq.append(tracku)
 
         if len(trackq) > 0:
             self._trackq = trackq
