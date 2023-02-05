@@ -126,6 +126,71 @@ command:
       selector:
         boolean:
 
+sound_settings:
+  name: Sound Settings
+  description: Set the sound options
+  fields:
+    entity_id:
+      name: Entity ID
+      description: Entity ID of the player on which the playback wil be execuded.
+      example: media_player.sound_room1
+      required: true
+      selector:
+        entity:
+          integration: linkplay
+    sound_program:
+      name: Sound Program
+      description: Select the sound preset
+      required: false
+      selector:
+        select:
+          options:
+            - music
+            - sports
+            - tv program
+            - game
+            - movie
+            - stereo
+    subwoofer_volume:
+      name: Subwoofer Volume
+      description: Set the subwoofer volume
+      required: false
+      selector:
+        number:
+          min: -4
+          max: 4
+          step: 1
+    surround:
+      name: 3D Surround
+      description: Set the 3D surround option on or off
+      required: false
+      selector:
+        boolean:
+    clear_voice:
+      name: Clear Voice
+      description: Set the clear voice option on or off
+      required: false
+      selector:
+        boolean:
+    bass_extension:
+      name: Bass Extension
+      description: Set the bass extension option on or off
+      required: false
+      selector:
+        boolean:
+    mute:
+      name: Mute
+      description: Set the mute on or off
+      required: false
+      selector:
+        boolean:
+#    power_saving:
+#      name: Power Saving
+#      description: Set the power saving option on or off
+#      required: false
+#      selector:
+#        boolean:
+
 play_track:
   name: Play track
   description: Play media track by name found in the tracks list.

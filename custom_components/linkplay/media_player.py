@@ -460,7 +460,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             return False
 
         finally:
-          await websession.close()
+            await websession.close()
 
         if response.status == HTTPStatus.OK:
             if jsn:
@@ -2605,6 +2605,46 @@ class LinkPlayDevice(MediaPlayerEntity):
         else:
             await self._master.async_play_track(track)
 
+    async def async_set_sound(self, settings):
+        """Play media track by name found in the tracks list."""
+        sound_program = settings.get('sound_program', None)
+        subwoofer_volume = settings.get('subwoofer_volume', None)
+        surround = settings.get('surround', None)
+        clear_voice = settings.get('clear_voice', None)
+        bass_extension = settings.get('bass_extension', None)
+        mute = settings.get('mute', None)
+        power_saving = settings.get('power_saving', None)
+        cmd = "YAMAHA_DATA_SET:{"
+        end = '}'
+        sentences = []
+        if subwoofer_volume is not None:
+            sentences.append(f"%22subwoofer%20volume%22:%22{subwoofer_volume}%22")
+        if surround is not None:
+            sentences.append(f"%223D%20surround%22:%22{int(surround)}%22")
+        if clear_voice is not None:
+            sentences.append(f"%22clear%20voice%22:%22{int(clear_voice)}%22")
+        if bass_extension is not None:
+            sentences.append(f"%22bass%20extension%22:%22{int(bass_extension)}%22")
+        if mute is not None:
+            sentences.append(f"%22mute%22:%22{int(mute)}%22")
+        if power_saving is not None:
+            sentences.append(f"%22power%20saving%22:%22{int(power_saving)}%22")
+        if sound_program is not None:
+            sentences.append(f"%22sound%20program%22:%22{sound_program.replace(' ', '%20')}%22")
+
+        for sentence in sentences:
+            setting, value = sentence.replace('%20', ' ').replace('%22', '').split(':')
+            for tentative in range(10):
+                await self.async_call_linkplay_httpapi("YAMAHA_DATA_GET", True)
+                await self.async_call_linkplay_httpapi(f"{cmd + sentence + end}", None)
+                await asyncio.sleep(0.1 * tentative)
+                status = await self.async_call_linkplay_httpapi("YAMAHA_DATA_GET", True)
+                _LOGGER.debug("Received data: '%s: %s'", setting, status[setting])
+                if status[setting] == value:
+                    break
+                _LOGGER.debug("Tentative %i to set '%s: %s' failed, value is %s", tentative,
+                              setting, value, status[setting])
+
     async def async_update_via_upnp(self):
         """Update track info via UPNP."""
         import validators
@@ -2694,12 +2734,12 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         trackq = []
         for playlist in xml_tree:
-           for tracks in playlist:
-               for track in tracks:
-                   if track.tag == 'URL':
-                       if rootdir in track.text:
-                           tracku = track.text.replace(rootdir, '')
-                           trackq.append(tracku)
+            for tracks in playlist:
+                for track in tracks:
+                    if track.tag == 'URL':
+                        if rootdir in track.text:
+                            tracku = track.text.replace(rootdir, '')
+                            trackq.append(tracku)
 
         if len(trackq) > 0:
             self._trackq = trackq

@@ -20,6 +20,7 @@ SERVICE_SNAP = 'snapshot'
 SERVICE_REST = 'restore'
 SERVICE_LIST = 'get_tracks'
 SERVICE_PLAY = 'play_track'
+SERVICE_SOUND = 'sound_settings'
 
 ATTR_MASTER = 'master'
 ATTR_PRESET = 'preset'
@@ -29,6 +30,12 @@ ATTR_SNAP = 'switchinput'
 ATTR_SELECT = 'input_select'
 ATTR_SOURCE = 'source'
 ATTR_TRACK = 'track'
+ATTR_SOUND = 'sound_program'
+ATTR_SUB = 'subwoofer_volume'
+ATTR_SURROUND = 'surround'
+ATTR_VOICE = 'clear_voice'
+ATTR_BASS = 'bass_extension'
+ATTR_MUTE = 'mute'
 
 SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_ENTITY_ID): cv.comp_entity_ids
@@ -61,6 +68,16 @@ SNAP_SERVICE_SCHEMA = vol.Schema({
 PLYTRK_SERVICE_SCHEMA = vol.Schema({
     vol.Required(ATTR_ENTITY_ID): cv.entity_id,
     vol.Required(ATTR_TRACK): cv.template
+})
+
+SOUND_SERVICE_SCHEMA = vol.Schema({
+    vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+    vol.Optional(ATTR_SOUND): cv.string,
+    vol.Optional(ATTR_SUB): int,
+    vol.Optional(ATTR_SURROUND): cv.boolean,
+    vol.Optional(ATTR_VOICE): cv.boolean,
+    vol.Optional(ATTR_BASS): cv.boolean,
+    vol.Optional(ATTR_MUTE): cv.boolean,
 })
 
 _LOGGER = logging.getLogger(__name__)
@@ -137,6 +154,19 @@ def setup(hass, config):
                     _LOGGER.debug("**PLAY TRACK** entity: %s; track: %s", device.entity_id, track)
                     await device.async_play_track(track)
 
+        elif service.service == SERVICE_SOUND:
+            settings = {key: service.data.get(key) for key in [ATTR_SOUND,
+                                                          ATTR_SUB,
+                                                          ATTR_SURROUND,
+                                                          ATTR_VOICE,
+                                                          ATTR_BASS,
+                                                          ATTR_MUTE]}
+            for device in entities:
+                if device.entity_id in entity_ids:
+                    _LOGGER.debug("**SET SOUND** entity: %s; settings: %s", device.entity_id,
+                                  settings)
+                    await device.async_set_sound(settings)
+
 
     hass.services.async_register(
         DOMAIN, SERVICE_JOIN, async_service_handle, schema=JOIN_SERVICE_SCHEMA)
@@ -152,5 +182,7 @@ def setup(hass, config):
         DOMAIN, SERVICE_REST, async_service_handle, schema=REST_SERVICE_SCHEMA)
     hass.services.async_register(
         DOMAIN, SERVICE_PLAY, async_service_handle, schema=PLYTRK_SERVICE_SCHEMA)
+    hass.services.async_register(
+        DOMAIN, SERVICE_SOUND, async_service_handle, schema=SOUND_SERVICE_SCHEMA)
 
     return True
