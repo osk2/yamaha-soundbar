@@ -2,7 +2,7 @@
 
 # Yamaha Soundbar
 
-> ⚠️ This component is under heavy development and expect some major changes in the future.
+> ⚠️ This component is under development and expect some major changes in the future.
 
 This component allows you to control Yamaha soundbar.
 
