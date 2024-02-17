@@ -25,7 +25,7 @@ The repo is forked from [nagyrobi/home-assistant-custom-components-linkplay](htt
 ```yaml
 # Example configuration.yaml entry
 media_player:
-    - platform: linkplay
+    - platform: yamaha_soundbar
       host: 192.168.1.11
       name: My Sound Bar
 ```

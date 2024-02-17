@@ -9,7 +9,7 @@ join:
       required: true
       selector:
         entity:
-          integration: linkplay
+          integration: yamaha_soundbar
     entity_id:
       name: Slave Entity ID
       description: Entity ID(s) of the player(s) that will connect to the master. Switch to YAML mode to manually add more, separated by comma.
@@ -17,7 +17,7 @@ join:
       required: true
       selector:
         entity:
-          integration: linkplay
+          integration: yamaha_soundbar
 
 unjoin:
   name: Unjoin
@@ -30,7 +30,7 @@ unjoin:
       required: true
       selector:
         entity:
-          integration: linkplay
+          integration: yamaha_soundbar
 
 snapshot:
   name: Snapshot
@@ -43,7 +43,7 @@ snapshot:
       required: true
       selector:
         entity:
-          integration: linkplay
+          integration: yamaha_soundbar
     switchinput:
       name: Switch Input / Volume Only
       description: To be used with Spotify Integration. Switch player to stream input along with snapshotting, before playing TTS. Applies for players with multiple inputs like Line-in, Optical, etc. Optional - if not specified, defaults to True.
@@ -64,7 +64,7 @@ restore:
       required: true
       selector:
         entity:
-          integration: linkplay
+          integration: yamaha_soundbar
 
 preset:
   name: Preset
@@ -77,7 +77,7 @@ preset:
       required: true
       selector:
         entity:
-          integration: linkplay
+          integration: yamaha_soundbar
     preset:
       name: Preset
       description: Content preset number on the device
@@ -91,7 +91,7 @@ preset:
           mode: box
 command:
   name: Command
-  description: Execute various linkplay-specific commands on the player.
+  description: Execute various yamaha_soundbar-specific commands on the player.
   fields:
     entity_id:
       name: Entity ID
@@ -100,7 +100,7 @@ command:
       required: true
       selector:
         entity:
-          integration: linkplay
+          integration: yamaha_soundbar
     command:
       name: Command
       description: 'To set the names for WriteDeviceNameToUnit and SetApSSIDName please switch to YAML mode and enter the name there.'
@@ -137,7 +137,7 @@ sound_settings:
       required: true
       selector:
         entity:
-          integration: linkplay
+          integration: yamaha_soundbar
     sound_program:
       name: Sound Program
       description: Select the sound preset
@@ -202,7 +202,7 @@ play_track:
       required: true
       selector:
         entity:
-          integration: linkplay
+          integration: yamaha_soundbar
     track:
       name: Track
       description: (Part of) The name of the track from the list
