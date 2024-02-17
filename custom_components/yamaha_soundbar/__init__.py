@@ -36,7 +36,7 @@ ATTR_SURROUND = 'surround'
 ATTR_VOICE = 'clear_voice'
 ATTR_BASS = 'bass_extension'
 ATTR_MUTE = 'mute'
-ATTR_POWER_SAVINGS = 'power_savings'
+ATTR_POWER_SAVING = 'power_saving'
 
 
 SERVICE_SCHEMA = vol.Schema({
