@@ -77,8 +77,8 @@ SOUND_SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_SURROUND): cv.boolean,
     vol.Optional(ATTR_VOICE): cv.boolean,
     vol.Optional(ATTR_BASS): cv.boolean,
-   vol.Optional(ATTR_MUTE): cv.boolean,
     vol.Optional(ATTR_MUTE): cv.boolean,
+    vol.Optional(ATTR_POWER_SAVING): cv.boolean,
 })
 
 _LOGGER = logging.getLogger(__name__)
@@ -161,6 +161,7 @@ def setup(hass, config):
                                                           ATTR_SURROUND,
                                                           ATTR_VOICE,
                                                           ATTR_BASS,
+                                                          ATTR_POWER_SAVING,
                                                           ATTR_MUTE]}
             for device in entities:
                 if device.entity_id in entity_ids:

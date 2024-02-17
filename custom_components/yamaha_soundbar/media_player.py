@@ -75,6 +75,8 @@ from homeassistant.components.media_player.const import (
     SUPPORT_SHUFFLE_SET,
     SUPPORT_REPEAT_SET,
     SUPPORT_VOLUME_MUTE,
+    SUPPORT_POWER_ON,
+    SUPPORT_POWER_OFF,
     SUPPORT_VOLUME_SET,
     SUPPORT_VOLUME_STEP,
     SUPPORT_STOP,
@@ -1620,22 +1622,22 @@ class YamahaDevice(MediaPlayerEntity):
         if value == "OK":
             self._volume = volume
 
-async def async_mute_volume(self, mute):
-    """Mute (true) or unmute (false) media player."""
-    value = await self.async_call_yamaha_httpapi("setPlayerCmd:mute:{0}".format(str(int(mute))), None)
+    async def async_mute_volume(self, mute):
+        """Mute (true) or unmute (false) media player."""
+        value = await self.async_call_yamaha_httpapi("setPlayerCmd:mute:{0}".format(str(int(mute))), None)
 
-    if value == "OK":
-        self._muted = bool(int(mute))
+        if value == "OK":
+            self._muted = bool(int(mute))
 
-async def async_turn_on(self):
-    """Turn the soundbar on."""
-    # Add the actual implementation to turn on the media player here
-    pass
+    async def  async_turn_on(self):
+        """Turn the soundbar on."""
+        # Add the actual implementation to turn on the media player here
+        pass
 
-async def async_turn_off(self):
-    """Turn the soundbar off."""
-    # Add the actual implementation to turn off the media player here
-    pass
+    async def async_turn_off(self):
+        """Turn the soundbar off."""
+        # Add the actual implementation to turn off the media player here
+        pass
 
 async def call_update_lastfm(self, cmd, params):
     """Update LastFM metadata."""
