@@ -2,16 +2,11 @@
   "domain": "yamaha_soundbar",
   "name": "Yamaha Soundbar",
   "version":"3.1.9",
-  "documentation": "https://github.com/osk2/yamaha-soundbar",
-  "issue_tracker": "https://github.com/osk2/yamaha-soundbar",
+  "documentation": "https://github.com/catduckgnaf/yamaha-soundbar",
+  "issue_tracker": "https://github.com/catduckgnaf/yamaha-soundbar",
   "after_dependencies": ["http", "tts", "media_source"],
   "config_flow": false,
   "iot_class": "local_polling",
-  "codeowners": [
-    "@nicjo814",
-    "@limych",
-    "@nagyrobi"
-  ],
   "requirements": [
     "async-upnp-client>=0.27",
     "validators~=0.12",
