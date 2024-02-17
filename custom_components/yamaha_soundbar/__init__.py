@@ -37,6 +37,7 @@ ATTR_VOICE = 'clear_voice'
 ATTR_BASS = 'bass_extension'
 ATTR_MUTE = 'mute'
 
+
 SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_ENTITY_ID): cv.comp_entity_ids
 })
