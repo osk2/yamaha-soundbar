@@ -75,8 +75,6 @@ from homeassistant.components.media_player.const import (
     SUPPORT_SHUFFLE_SET,
     SUPPORT_REPEAT_SET,
     SUPPORT_VOLUME_MUTE,
-    SUPPORT_POWER_ON,
-    SUPPORT_POWER_OFF,
     SUPPORT_VOLUME_SET,
     SUPPORT_VOLUME_STEP,
     SUPPORT_STOP,
