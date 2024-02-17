@@ -1646,20 +1646,20 @@ async def call_update_lastfm(self, cmd, params):
         response = await websession.get(url)
         if response.status == HTTPStatus.OK:
             data = await response.json(content_type=None) #response.text()
-            else:
-                _LOGGER.error(
-                    "Get failed, response code: %s Full message: %s",
-                    response.status,
-                    response,
-                )
-                return False
-
-        except (asyncio.TimeoutError, aiohttp.ClientError) as error:
+        else:
             _LOGGER.error(
-                "Failed communicating with LastFM '%s': %s", self._name, type(error)
+                "Get failed, response code: %s Full message: %s",
+                response.status,
+                response,
             )
             return False
-        return data
+
+    except (asyncio.TimeoutError, aiohttp.ClientError) as error:
+        _LOGGER.error(
+            "Failed communicating with LastFM '%s': %s", self._name, type(error)
+        )
+        return False
+    return data
 
     @Throttle(LFM_THROTTLE)
     async def async_get_lastfm_coverart(self):
