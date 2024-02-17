@@ -28,6 +28,12 @@ media_player:
       name: My Sound Bar
 ```
 
+## Todo
+
+1. Proper Integration with config_flow
+2. Add on/off support
+3. Add other API features 
+
 ## License
 
 This project is licensed under MIT license. See [LICENSE](LICENSE) file for details.
