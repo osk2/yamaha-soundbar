@@ -184,12 +184,12 @@ sound_settings:
       required: false
       selector:
         boolean:
-#    power_saving:
-#      name: Power Saving
-#      description: Set the power saving option on or off
-#      required: false
-#      selector:
-#        boolean:
+    power_saving:
+     name: Power Saving
+      description: Set the power saving option on or off
+      required: false
+      selector:
+        boolean:
 
 play_track:
   name: Play track
