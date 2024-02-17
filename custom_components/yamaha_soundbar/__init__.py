@@ -36,6 +36,8 @@ ATTR_SURROUND = 'surround'
 ATTR_VOICE = 'clear_voice'
 ATTR_BASS = 'bass_extension'
 ATTR_MUTE = 'mute'
+ATTR_POWER_SAVINGS = 'power_savings'
+
 
 SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_ENTITY_ID): cv.comp_entity_ids
@@ -78,7 +80,7 @@ SOUND_SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_VOICE): cv.boolean,
     vol.Optional(ATTR_BASS): cv.boolean,
     vol.Optional(ATTR_MUTE): cv.boolean,
-    vol.Optional(ATTR_POWER_SAVING): cv.boolean,
+    vol.Optional(ATTR_POWER_SAVING): cv.boolean
 })
 
 _LOGGER = logging.getLogger(__name__)
