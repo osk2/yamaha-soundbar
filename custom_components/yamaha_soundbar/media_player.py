@@ -98,7 +98,7 @@ from . import DOMAIN, ATTR_MASTER
 
 _LOGGER = logging.getLogger(__name__)
 
-ICON_DEFAULT = 'mdi:speaker'
+ICON_DEFAULT = 'mdi:soundbar'
 ICON_PLAYING = 'mdi:speaker-wireless'
 ICON_MUTED = 'mdi:speaker-off'
 ICON_MULTIROOM = 'mdi:speaker-multiple'
