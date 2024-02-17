@@ -2,7 +2,7 @@
 Support for Yamaha Linkplay A118 based devices.
 
 For more details about this platform, please refer to the documentation at
-https://github.com/catduckgnaf/yamaha-soundbar
+https://github.com/catduckgnaf/yamaha_soundbar
 """
 
 import asyncio
@@ -44,6 +44,7 @@ from homeassistant.components.media_player import (
     PLATFORM_SCHEMA,
     MediaPlayerEntity,
     MediaPlayerDeviceClass,
+    MediaPlayerState,
     BrowseMedia,
 )
 
@@ -192,17 +193,17 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     }
 )
 
-class LinkPlayData:
+class YamahaData:
     """Storage class for platform global data."""
     def __init__(self):
         """Initialize the data."""
         self.entities = []
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    """Set up the LinkPlayDevice platform."""
+    """Set up the YamahaDevice platform."""
 
     if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = LinkPlayData()
+        hass.data[DOMAIN] = YamahaData()
 
     name = config.get(CONF_NAME)
     host = config.get(CONF_HOST)
@@ -256,14 +257,14 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
     except (asyncio.TimeoutError, aiohttp.ClientError) as error:
         _LOGGER.warning(
-            "Failed communicating with LinkPlayDevice (start) '%s': uuid: %s %s", host, uuid, type(error)
+            "Failed communicating with YamahaDevice (start) '%s': uuid: %s %s", host, uuid, type(error)
         )
         state = STATE_UNAVAILABLE
 
     finally:
         await websession.close()
 
-    yamaha = LinkPlayDevice(name,
+    yamaha = YamahaDevice(name,
                             host,
                             sources,
                             common_sources,
@@ -279,8 +280,8 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
     async_add_entities([yamaha])
 
-class LinkPlayDevice(MediaPlayerEntity):
-    """LinkPlayDevice Player Object."""
+class YamahaDevice(MediaPlayerEntity):
+    """YamahaDevice Player Object."""
 
     def __init__(self,
                  name,
@@ -308,7 +309,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         self._preset_key = 4
         self._name = name
         self._host = host
-        self._icon = mdi:soundbar
+        self._icon = ICON_DEFAULT
         self._state = state
         self._volume = 0
         self._volume_step = volume_step
@@ -426,7 +427,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         except (asyncio.TimeoutError, aiohttp.ClientError) as error:
             _LOGGER.warning(
-                "Failed async communicating with LinkPlayDevice (httpapi) '%s': %s", self._name, type(error)
+                "Failed async communicating with YamahaDevice (httpapi) '%s': %s", self._name, type(error)
             )
             return False
 
@@ -981,6 +982,8 @@ class LinkPlayDevice(MediaPlayerEntity):
             SUPPORT_STOP | SUPPORT_PLAY
 
         return self._features
+
+    SUPPORTED_COMMANDS = MediaPlayerEntityFeature.TURN_ON | MediaPlayerEntityFeature.TURN_OFF
 
     @property
     def media_position(self):
@@ -1616,36 +1619,33 @@ class LinkPlayDevice(MediaPlayerEntity):
         if value == "OK":
             self._volume = volume
 
-    async def async_mute_volume(self, mute):
-        """Mute (true) or unmute (false) media player."""
-        value = await self.async_call_yamaha_httpapi("setPlayerCmd:mute:{0}".format(str(int(mute))), None)
+async def async_mute_volume(self, mute):
+    """Mute (true) or unmute (false) media player."""
+    value = await self.async_call_yamaha_httpapi("setPlayerCmd:mute:{0}".format(str(int(mute))), None)
 
-        if value == "OK":
-            self._muted = bool(int(mute))
+    if value == "OK":
+        self._muted = bool(int(mute))
 
-    async def async_turn_on(self):
-        """Use Mune/Unmute instead, because power is not supported."""
-        await self.async_mute_volume(False)
+async def async_turn_on(self):
+    """Turn the soundbar on."""
+    # Add the actual implementation to turn on the media player here
+    pass
 
-    async def async_turn_off(self):
-        """Use Mune/Unmute instead, because power is not supported."""
-        await self.async_mute_volume(True)
+async def async_turn_off(self):
+    """Turn the soundbar off."""
+    # Add the actual implementation to turn off the media player here
+    pass
 
-    async def async_toggle(self):
-        """Use Mune/Unmute instead, because power is not supported."""
-        await self.async_mute_volume(not self._muted)
+async def call_update_lastfm(self, cmd, params):
+    """Update LastFM metadata."""
+    url = "{0}{1}&{2}&api_key={3}&format=json".format(LASTFM_API_BASE, cmd, params, self._lastfm_api_key)
+    #_LOGGER.debug("Updating LastFM from URL: %s", url)
 
-    async def call_update_lastfm(self, cmd, params):
-        """Update LastFM metadata."""
-        url = "{0}{1}&{2}&api_key={3}&format=json".format(LASTFM_API_BASE, cmd, params, self._lastfm_api_key)
-        #_LOGGER.debug("Updating LastFM from URL: %s", url)
-
-        try:
-            websession = async_get_clientsession(self.hass)
-            response = await websession.get(url)
-            if response.status == HTTPStatus.OK:
-                data = await response.json(content_type=None) #response.text()
-
+    try:
+        websession = async_get_clientsession(self.hass)
+        response = await websession.get(url)
+        if response.status == HTTPStatus.OK:
+            data = await response.json(content_type=None) #response.text()
             else:
                 _LOGGER.error(
                     "Get failed, response code: %s Full message: %s",

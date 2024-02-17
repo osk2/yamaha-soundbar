@@ -185,6 +185,14 @@ sound_settings:
       selector:
         boolean:
 
+          ## may be unstable 
+    power_saving:
+      name: Power Saving
+      description: Set the power saving option on or off
+      required: false
+      selector:
+        boolean:
+
 play_track:
   name: Play track
   description: Play media track by name found in the tracks list.

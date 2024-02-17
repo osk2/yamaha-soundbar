@@ -2,7 +2,7 @@
 Support for Yamaha Linkplay A118 based devices
 
 For more details about this platform, please refer to the documentation at
-https://github.com/catduckgnaf/yamaha-soundbar
+https://github.com/catduckgnaf/yamaha_soundbar
 """
 import logging
 import voluptuous as vol
@@ -36,7 +36,6 @@ ATTR_SURROUND = 'surround'
 ATTR_VOICE = 'clear_voice'
 ATTR_BASS = 'bass_extension'
 ATTR_MUTE = 'mute'
-
 
 SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_ENTITY_ID): cv.comp_entity_ids
@@ -78,6 +77,7 @@ SOUND_SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_SURROUND): cv.boolean,
     vol.Optional(ATTR_VOICE): cv.boolean,
     vol.Optional(ATTR_BASS): cv.boolean,
+   vol.Optional(ATTR_MUTE): cv.boolean,
     vol.Optional(ATTR_MUTE): cv.boolean,
 })
 
