@@ -26,6 +26,13 @@ media_player:
     - platform: yamaha_soundbar
       host: 192.168.1.11
       name: My Sound Bar
+      # To Name your sources (optional)
+      sources:
+              {
+          'HDMI': 'TV', 
+          'optical': 'Plexamp', 
+          'bluetooth': 'Bluetooth',
+        }
 ```
 
 ## Todo
