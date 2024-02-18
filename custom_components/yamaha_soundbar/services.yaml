@@ -184,8 +184,6 @@ sound_settings:
       required: false
       selector:
         boolean:
-
-          ## may be unstable 
     power_saving:
       name: Power Saving
       description: Set the power saving option on or off
