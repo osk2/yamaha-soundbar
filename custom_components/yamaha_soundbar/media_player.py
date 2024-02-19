@@ -2,7 +2,7 @@
 Support for Yamaha Linkplay A118 based devices.
 
 For more details about this platform, please refer to the documentation at
-https://github.com/catduckgnaf/yamaha_soundbar
+https://github.com/osk2/yamaha-soundbar
 """
 
 import asyncio

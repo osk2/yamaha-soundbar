@@ -4,7 +4,7 @@ This component allows you to integrate control of audio devices based on Yamaha 
 
 Fully compatible with Mini Media Player card for Lovelace UI, including speaker group management.
 
-[Configuration details and documentation](https://github.com/catduckgnaf/yamaha_soundbar#installation)
+[Configuration details and documentation](https://github.com/osk2/yamaha-soundbar#installation)
 
 
 ## Supported features:
