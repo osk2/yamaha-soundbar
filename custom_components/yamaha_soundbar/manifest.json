@@ -1,7 +1,7 @@
 {
   "domain": "yamaha_soundbar",
   "name": "Yamaha Soundbar",
-  "version":"3.2.0",
+  "version":"3.2.2",
   "documentation": "https://github.com/osk2/yamaha-soundbar",
   "issue_tracker": "https://github.com/osk2/yamaha-soundbar",
   "after_dependencies": ["http", "tts", "media_source"],

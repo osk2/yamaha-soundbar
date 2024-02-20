@@ -21,8 +21,7 @@ Tested on Yamaha YAS-109 & YAS-209, any Yamaha soundbar based on Linkplay A118 s
 media_player:
   - platform: yamaha_soundbar
     host: 192.168.1.11
-    name: My Sound Bar
-    # To Name your sources (optional)
+    name: My Sound Bar # To name your sources (optional)
     sources:
       {
         'HDMI': 'TV', 

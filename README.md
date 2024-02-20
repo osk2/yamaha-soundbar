@@ -29,8 +29,7 @@ If you are upgrading from version 3.1.9 or earlier:
 media_player:
   - platform: yamaha_soundbar
     host: 192.168.1.11
-    name: My Sound Bar
-    # To Name your sources (optional)
+    name: My Sound Bar # To name your sources (optional)
     sources:
       {
         'HDMI': 'TV', 
@@ -41,7 +40,7 @@ media_player:
 
 ## Todo
 
-1. Proper Integration with config_flow
+1. Proper integration with config_flow
 2. Add on/off support
 3. Add other API features 
 
