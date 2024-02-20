@@ -1,8 +1,8 @@
 """
-Support for LinkPlay based devices.
+Support for Yamaha Linkplay A118 based devices
 
 For more details about this platform, please refer to the documentation at
-https://github.com/nagyrobi/home-assistant-custom-components-linkplay
+https://github.com/osk2/yamaha_soundbar
 """
 import logging
 import voluptuous as vol
@@ -10,7 +10,7 @@ import voluptuous as vol
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.helpers import config_validation as cv
 
-DOMAIN = 'linkplay'
+DOMAIN = 'yamaha_soundbar'
 
 SERVICE_JOIN = 'join'
 SERVICE_UNJOIN = 'unjoin'
@@ -36,6 +36,8 @@ ATTR_SURROUND = 'surround'
 ATTR_VOICE = 'clear_voice'
 ATTR_BASS = 'bass_extension'
 ATTR_MUTE = 'mute'
+ATTR_POWER_SAVING = 'power_saving'
+
 
 SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_ENTITY_ID): cv.comp_entity_ids
@@ -78,6 +80,7 @@ SOUND_SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_VOICE): cv.boolean,
     vol.Optional(ATTR_BASS): cv.boolean,
     vol.Optional(ATTR_MUTE): cv.boolean,
+    vol.Optional(ATTR_POWER_SAVING): cv.boolean
 })
 
 _LOGGER = logging.getLogger(__name__)
@@ -160,6 +163,7 @@ def setup(hass, config):
                                                           ATTR_SURROUND,
                                                           ATTR_VOICE,
                                                           ATTR_BASS,
+                                                          ATTR_POWER_SAVING,
                                                           ATTR_MUTE]}
             for device in entities:
                 if device.entity_id in entity_ids:

@@ -1,8 +1,8 @@
 """
-Support for Linkplay based devices.
+Support for Yamaha Linkplay A118 based devices.
 
 For more details about this platform, please refer to the documentation at
-https://github.com/nagyrobi/home-assistant-custom-components-linkplay
+https://github.com/osk2/yamaha-soundbar
 """
 
 import asyncio
@@ -43,6 +43,9 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.components.media_player import (
     PLATFORM_SCHEMA,
     MediaPlayerEntity,
+    MediaPlayerEntityFeature,
+    MediaPlayerState,
+    MediaType,
     MediaPlayerDeviceClass,
     BrowseMedia,
 )
@@ -61,22 +64,6 @@ from homeassistant.components.media_player.const import (
     MEDIA_TYPE_TRACK,
     MEDIA_CLASS_DIRECTORY,
     MEDIA_CLASS_MUSIC,
-    SUPPORT_NEXT_TRACK,
-    SUPPORT_PAUSE,
-    SUPPORT_PLAY,
-    SUPPORT_PLAY_MEDIA,
-    SUPPORT_PREVIOUS_TRACK,
-    SUPPORT_SEEK,
-    SUPPORT_BROWSE_MEDIA,
-    SUPPORT_SELECT_SOUND_MODE,
-    SUPPORT_SELECT_SOURCE,
-    SUPPORT_SHUFFLE_SET,
-    SUPPORT_REPEAT_SET,
-    SUPPORT_VOLUME_MUTE,
-    SUPPORT_VOLUME_SET,
-    SUPPORT_VOLUME_STEP,
-    SUPPORT_STOP,
-    SUPPORT_GROUPING,
     REPEAT_MODE_ALL,
     REPEAT_MODE_OFF,
     REPEAT_MODE_ONE,
@@ -98,7 +85,7 @@ from . import DOMAIN, ATTR_MASTER
 
 _LOGGER = logging.getLogger(__name__)
 
-ICON_DEFAULT = 'mdi:speaker'
+ICON_DEFAULT = 'mdi:soundbar'
 ICON_PLAYING = 'mdi:speaker-wireless'
 ICON_MUTED = 'mdi:speaker-off'
 ICON_MULTIROOM = 'mdi:speaker-multiple'
@@ -107,7 +94,7 @@ ICON_PUSHSTREAM = 'mdi:cast-audio'
 ICON_TTS = 'mdi:text-to-speech'
 
 ATTR_SLAVE = 'slave'
-ATTR_LINKPLAY_GROUP = 'linkplay_group'
+ATTR_YAMAHA_GROUP = 'yamaha_group'
 ATTR_FWVER = 'firmware'
 ATTR_TRCNT = 'tracks_local'
 ATTR_TRCRT = 'track_current'
@@ -119,6 +106,7 @@ ATTR_DEBUG = 'debug_info'
 ATTR_MASS_POSITION = 'media_position_mass'
 
 CONF_NAME = 'name'
+CONF_SOURCE_IGNORE = "source_ignore"
 CONF_LASTFM_API_KEY = 'lastfm_api_key'
 CONF_SOURCES = 'sources'
 CONF_COMMONSOURCES = 'common_sources'
@@ -162,18 +150,9 @@ CUT_EXTENSIONS = ['mp3', 'mp2', 'm2a', 'mpg', 'wav', 'aac', 'flac', 'flc', 'm4a'
 SOUND_MODES = {'0': 'Normal', '1': 'Classic', '2': 'Pop', '3': 'Jazz', '4': 'Vocal'}
 
 SOURCES = {'bluetooth': 'Bluetooth',
-           'line-in': 'Line-in',
-           'line-in2': 'Line-in 2',
            'optical': 'Optical',
-           'co-axial': 'Coaxial',
-           'HDMI': 'HDMI',
-           'udisk': 'USB disk',
-           'TFcard': 'SD card',
-           'RCA': 'RCA',
-           'XLR': 'XLR',
-           'FM': 'FM',
-           'cd': 'CD'}
-
+           'HDMI': 'HDMI'}
+           
 SOURCES_MAP = {'-1': 'Idle',
                '0': 'Idle',
                '1': 'Airplay',
@@ -216,22 +195,23 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_COMMONSOURCES): cv.ensure_list,
         vol.Optional(CONF_LASTFM_API_KEY): cv.string,
         vol.Optional(CONF_UUID, default=''): cv.string,
+        vol.Optional(CONF_SOURCE_IGNORE, default=[]): vol.All( cv.ensure_list, [cv.string]),
         vol.Optional(CONF_VOLUME_STEP, default=DEFAULT_VOLUME_STEP): vol.All(int, vol.Range(min=1, max=25)),
         vol.Optional(CONF_ANNOUNCE_VOLUME_INCREASE, default=DEFAULT_ANNOUNCE_VOLUME_INCREASE): vol.All(int, vol.Range(min=0, max=50)),
     }
 )
 
-class LinkPlayData:
+class YamahaData:
     """Storage class for platform global data."""
     def __init__(self):
         """Initialize the data."""
         self.entities = []
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    """Set up the LinkPlayDevice platform."""
+    """Set up the YamahaDevice platform."""
 
     if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = LinkPlayData()
+        hass.data[DOMAIN] = YamahaData()
 
     name = config.get(CONF_NAME)
     host = config.get(CONF_HOST)
@@ -285,14 +265,14 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
     except (asyncio.TimeoutError, aiohttp.ClientError) as error:
         _LOGGER.warning(
-            "Failed communicating with LinkPlayDevice (start) '%s': uuid: %s %s", host, uuid, type(error)
+            "Failed communicating with YamahaDevice (start) '%s': uuid: %s %s", host, uuid, type(error)
         )
         state = STATE_UNAVAILABLE
 
     finally:
         await websession.close()
 
-    linkplay = LinkPlayDevice(name,
+    yamaha = YamahaDevice(name,
                             host,
                             sources,
                             common_sources,
@@ -306,10 +286,10 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
                             state,
                             hass)
 
-    async_add_entities([linkplay])
+    async_add_entities([yamaha])
 
-class LinkPlayDevice(MediaPlayerEntity):
-    """LinkPlayDevice Player Object."""
+class YamahaDevice(MediaPlayerEntity):
+    """YamahaDevice Player Object."""
 
     def __init__(self,
                  name,
@@ -432,7 +412,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             if self._playing_mass:
                 self.get_music_assistant_metadata(event)
 
-    async def async_call_linkplay_httpapi(self, cmd, jsn):
+    async def async_call_yamaha_httpapi(self, cmd, jsn):
         """Get the latest data from HTTPAPI service."""
         url = "https://{0}/httpapi.asp?command={1}".format(self._host, cmd)
 
@@ -455,7 +435,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 
         except (asyncio.TimeoutError, aiohttp.ClientError) as error:
             _LOGGER.warning(
-                "Failed async communicating with LinkPlayDevice (httpapi) '%s': %s", self._name, type(error)
+                "Failed async communicating with YamahaDevice (httpapi) '%s': %s", self._name, type(error)
             )
             return False
 
@@ -479,7 +459,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             return False
         return data
 
-    async def async_call_linkplay_tcpuart(self, cmd):
+    async def async_call_yamaha_tcpuart(self, cmd):
         """Get the latest data from TCP UART service."""
         LENC = format(len(cmd), '02x')
         HED1 = '18 96 18 20 '
@@ -513,7 +493,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 
     @Throttle(UNA_THROTTLE)
     async def async_get_status(self):
-        resp = await self.async_call_linkplay_httpapi("getPlayerStatus", True)
+        resp = await self.async_call_yamaha_httpapi("getPlayerStatus", True)
         if resp is False:
             _LOGGER.debug('Unable to connect to device: %s, %s', self.entity_id, self._name)
             self._state = STATE_UNAVAILABLE
@@ -593,7 +573,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             self._unav_throttle = False
             if self._first_update or (self._state == STATE_UNAVAILABLE or self._multiroom_wifidirect):
                 #_LOGGER.debug("03 Update first time getStatus %s, %s", self.entity_id, self._name)
-                device_status = await self.async_call_linkplay_httpapi("getStatusEx", True)
+                device_status = await self.async_call_yamaha_httpapi("getStatusEx", True)
                 if device_status is not None:
                     if isinstance(device_status, dict):
                         if self._state == STATE_UNAVAILABLE:
@@ -629,7 +609,7 @@ class LinkPlayDevice(MediaPlayerEntity):
 
                         if self._led_off and self._uuid != '':
                             if self._uuid.startswith(UUID_ARYLIC) and self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_RAKOIT_UART_MIN):
-                                value = await self.async_call_linkplay_tcpuart('MCU+PAS+RAKOIT:LED:0&')
+                                value = await self.async_call_yamaha_tcpuart('MCU+PAS+RAKOIT:LED:0&')
                                 _LOGGER.debug("LED turn off: %s, %s, response: %s", self.entity_id, self._name, value)
 
                         if not self._multiroom_wifidirect and self._fw_ver:
@@ -642,7 +622,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                                 self._upnp_device = await self._factory.async_create_device(url)
                             except:
                                 _LOGGER.warning(
-                                    "Failed communicating with LinkPlayDevice (UPnP) '%s': %s", self._name, type(error)
+                                    "Failed communicating with Yamaha (UPnP) '%s': %s", self._name, type(error)
                                 )
 
                         if self._first_update:
@@ -730,7 +710,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     if volume > 100:
                         volume = 100
                     _LOGGER.debug("For: %s, Announce started, increasing volume with %s to %s", self._name, self._announce_volume_increase, volume)
-                    value = await self.async_call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
+                    value = await self.async_call_yamaha_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
                     if value == "OK":
                         self._volume = volume
 
@@ -974,40 +954,78 @@ class LinkPlayDevice(MediaPlayerEntity):
         return sorted(list(SOUND_MODES.values()))
 
     @property
-    def supported_features(self):
+    def supported_features(self) -> MediaPlayerEntityFeature:
         """Flag media player features that are supported."""
         if self._slave_mode and self._features:
             return self._features
 
-        if self._playing_localfile or self._playing_spotify or self._playing_webplaylist or self._playing_mass:
+        if self._playing_localfile or self._playing_spotify or self._playing_webplaylist:
             if self._state in [STATE_PLAYING, STATE_PAUSED]:
-                self._features = \
-                SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | SUPPORT_GROUPING | SUPPORT_BROWSE_MEDIA | \
-                SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
-                SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE | \
-                SUPPORT_NEXT_TRACK | SUPPORT_PREVIOUS_TRACK | SUPPORT_SHUFFLE_SET | SUPPORT_REPEAT_SET
-                if not self._playing_mass_radio:
-                    self._features |=  SUPPORT_SEEK
+                self._features = (
+                    MediaPlayerEntityFeature.SELECT_SOURCE 
+                    | MediaPlayerEntityFeature.SELECT_SOUND_MODE 
+                    | MediaPlayerEntityFeature.PLAY_MEDIA 
+                    | MediaPlayerEntityFeature.GROUPING 
+                    | MediaPlayerEntityFeature.BROWSE_MEDIA 
+                    | MediaPlayerEntityFeature.VOLUME_SET 
+                    | MediaPlayerEntityFeature.VOLUME_STEP 
+                    | MediaPlayerEntityFeature.VOLUME_MUTE 
+                    | MediaPlayerEntityFeature.STOP 
+                    | MediaPlayerEntityFeature.PLAY 
+                    | MediaPlayerEntityFeature.PAUSE 
+                    | MediaPlayerEntityFeature.NEXT_TRACK 
+                    | MediaPlayerEntityFeature.PREVIOUS_TRACK 
+                    | MediaPlayerEntityFeature.SHUFFLE_SET 
+                    | MediaPlayerEntityFeature.REPEAT_SET 
+                    | MediaPlayerEntityFeature.SEEK
+                )
             else:
-                self._features = \
-                SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | SUPPORT_GROUPING | SUPPORT_BROWSE_MEDIA | \
-                SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
-                SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE | \
-                SUPPORT_NEXT_TRACK | SUPPORT_PREVIOUS_TRACK | SUPPORT_SHUFFLE_SET | SUPPORT_REPEAT_SET
+                self._features = (
+                    MediaPlayerEntityFeature.SELECT_SOURCE 
+                    | MediaPlayerEntityFeature.SELECT_SOUND_MODE 
+                    | MediaPlayerEntityFeature.PLAY_MEDIA 
+                    | MediaPlayerEntityFeature.GROUPING 
+                    | MediaPlayerEntityFeature.BROWSE_MEDIA 
+                    | MediaPlayerEntityFeature.VOLUME_SET 
+                    | MediaPlayerEntityFeature.VOLUME_STEP 
+                    | MediaPlayerEntityFeature.VOLUME_MUTE 
+                    | MediaPlayerEntityFeature.STOP 
+                    | MediaPlayerEntityFeature.PLAY 
+                    | MediaPlayerEntityFeature.PAUSE 
+                    | MediaPlayerEntityFeature.NEXT_TRACK 
+                    | MediaPlayerEntityFeature.PREVIOUS_TRACK 
+                    | MediaPlayerEntityFeature.SHUFFLE_SET 
+                    | MediaPlayerEntityFeature.REPEAT_SET
+                )
 
         elif self._playing_stream or self._playing_mediabrowser:
-            self._features = \
-            SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | SUPPORT_GROUPING | SUPPORT_BROWSE_MEDIA | \
-            SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
-            SUPPORT_STOP | SUPPORT_PLAY | SUPPORT_PAUSE
-            if self._state in [STATE_PLAYING, STATE_PAUSED] and (self._playing_mediabrowser):
-                self._features |= SUPPORT_SEEK
+            self._features = (
+                MediaPlayerEntityFeature.SELECT_SOURCE 
+                | MediaPlayerEntityFeature.SELECT_SOUND_MODE 
+                | MediaPlayerEntityFeature.PLAY_MEDIA 
+                | MediaPlayerEntityFeature.GROUPING 
+                | MediaPlayerEntityFeature.BROWSE_MEDIA 
+                | MediaPlayerEntityFeature.VOLUME_SET 
+                | MediaPlayerEntityFeature.VOLUME_STEP 
+                | MediaPlayerEntityFeature.VOLUME_MUTE 
+                | MediaPlayerEntityFeature.STOP 
+                | MediaPlayerEntityFeature.PLAY 
+                | MediaPlayerEntityFeature.PAUSE
+                | MediaPlayerEntityFeature.SEEK
+                )
 
         elif self._playing_liveinput:
-            self._features = \
-            SUPPORT_SELECT_SOURCE | SUPPORT_SELECT_SOUND_MODE | SUPPORT_PLAY_MEDIA | SUPPORT_GROUPING | SUPPORT_BROWSE_MEDIA | \
-            SUPPORT_VOLUME_SET | SUPPORT_VOLUME_STEP | SUPPORT_VOLUME_MUTE | \
-            SUPPORT_STOP | SUPPORT_PLAY
+            self._features = (
+                MediaPlayerEntityFeature.SELECT_SOURCE 
+                | MediaPlayerEntityFeature.SELECT_SOUND_MODE 
+                | MediaPlayerEntityFeature.PLAY_MEDIA 
+                | MediaPlayerEntityFeature.GROUPING 
+                | MediaPlayerEntityFeature.BROWSE_MEDIA 
+                | MediaPlayerEntityFeature.VOLUME_SET 
+                | MediaPlayerEntityFeature.VOLUME_STEP 
+                | MediaPlayerEntityFeature.VOLUME_MUTE 
+                | MediaPlayerEntityFeature.STOP
+                )
 
         return self._features
 
@@ -1114,7 +1132,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         """List members in group and set master and slave state."""
         attributes = {}
         if self._multiroom_group != []:
-            attributes[ATTR_LINKPLAY_GROUP] = self._multiroom_group
+            attributes[ATTR_YAMAHA_GROUP] = self._multiroom_group
             attributes[ATTR_GROUP_MEMBERS] = self._multiroom_group
 
         attributes[ATTR_MASTER] = self._is_master
@@ -1185,7 +1203,7 @@ class LinkPlayDevice(MediaPlayerEntity):
     def unique_id(self):
         """Return the unique id."""
         if self._uuid != '':
-            return "linkplay_media_" + self._uuid
+            return "yamaha_media_" + self._uuid
 
     @property
     def fw_ver(self):
@@ -1196,7 +1214,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         """Send media_next command to media player."""
         if not self._slave_mode:
             if not self._playing_mass:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:next", None)
+                value = await self.async_call_yamaha_httpapi("setPlayerCmd:next", None)
                 self._playhead_position = 0
                 self._duration = 0
                 self._position_updated_at = utcnow()
@@ -1212,7 +1230,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         """Send media_previous command to media player."""
         if not self._slave_mode:
             if not self._playing_mass:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:prev", None)
+                value = await self.async_call_yamaha_httpapi("setPlayerCmd:prev", None)
                 self._playhead_position = 0
                 self._duration = 0
                 self._position_updated_at = utcnow()
@@ -1228,7 +1246,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         """Send media_play command to media player."""
         if not self._slave_mode:
             if self._state == STATE_PAUSED:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:resume", None)
+                value = await self.async_call_yamaha_httpapi("setPlayerCmd:resume", None)
 
             elif self._prev_source != None:
                 temp_source = next((k for k in self._source_list if self._source_list[k] == self._prev_source), None)
@@ -1241,9 +1259,9 @@ class LinkPlayDevice(MediaPlayerEntity):
                         self._source = None
                         value = "OK"
                 else:
-                    value = await self.async_call_linkplay_httpapi("setPlayerCmd:play", None)
+                    value = await self.async_call_yamaha_httpapi("setPlayerCmd:play", None)
             else:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:play", None)
+                value = await self.async_call_yamaha_httpapi("setPlayerCmd:play", None)
 
             if value == "OK":
                 self._state = STATE_PLAYING
@@ -1269,7 +1287,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 await self.async_media_stop()
                 return
 
-            value = await self.async_call_linkplay_httpapi("setPlayerCmd:pause", None)
+            value = await self.async_call_yamaha_httpapi("setPlayerCmd:pause", None)
             if value == "OK":
                 self._position_updated_at = utcnow()
                 self._idletime_updated_at = self._position_updated_at
@@ -1292,15 +1310,15 @@ class LinkPlayDevice(MediaPlayerEntity):
 
             if self._playing_spotify or self._playing_liveinput:
                 if self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_SLOW_STREAMS):
-                    await self.async_call_linkplay_httpapi("setPlayerCmd:pause", None)
-                await self.async_call_linkplay_httpapi("setPlayerCmd:switchmode:wifi", None)
+                    await self.async_call_yamaha_httpapi("setPlayerCmd:pause", None)
+                await self.async_call_yamaha_httpapi("setPlayerCmd:switchmode:wifi", None)
 
             if self._playing_stream:  #recent firmwares don't stop the previous stream quickly enough
                 if self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_SLOW_STREAMS):
-                    await self.async_call_linkplay_httpapi("setPlayerCmd:pause", None)
-                    await self.async_call_linkplay_httpapi("setPlayerCmd:switchmode:wifi", None)
+                    await self.async_call_yamaha_httpapi("setPlayerCmd:pause", None)
+                    await self.async_call_yamaha_httpapi("setPlayerCmd:switchmode:wifi", None)
 
-            value = await self.async_call_linkplay_httpapi("setPlayerCmd:stop", None)
+            value = await self.async_call_yamaha_httpapi("setPlayerCmd:stop", None)
             if value == "OK":
                 self._state = STATE_IDLE
                 self._playhead_position = 0
@@ -1339,7 +1357,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         if not self._slave_mode:
             _LOGGER.debug("Seek. Device: %s, DUR: %s POS: %", self.name, self._duration, position)
             if self._duration > 0 and position >= 0 and position <= self._duration:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:seek:{0}".format(str(position)), None)
+                value = await self.async_call_yamaha_httpapi("setPlayerCmd:seek:{0}".format(str(position)), None)
                 self._position_updated_at = utcnow()
                 self._idletime_updated_at = self._position_updated_at
                 if value != "OK":
@@ -1443,18 +1461,18 @@ class LinkPlayDevice(MediaPlayerEntity):
                     media_id_final = await self.async_detect_stream_url_redirection(media_id)
 
                 if self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_SLOW_STREAMS) and self._state == STATE_PLAYING:
-                    await self.async_call_linkplay_httpapi("setPlayerCmd:pause", None)
+                    await self.async_call_yamaha_httpapi("setPlayerCmd:pause", None)
 
                 if self._playing_spotify:  # disconnect from Spotify before playing new http source
-                    await self.async_call_linkplay_httpapi("setPlayerCmd:switchmode:wifi", None)
+                    await self.async_call_yamaha_httpapi("setPlayerCmd:switchmode:wifi", None)
 
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:play:{0}".format(media_id_final), None)
+                value = await self.async_call_yamaha_httpapi("setPlayerCmd:play:{0}".format(media_id_final), None)
                 if value != "OK":
                     _LOGGER.warning("Failed to play media type URL. Device: %s, Got response: %s, Media_Id: %s", self.entity_id, value, media_id)
                     return False
 
             elif media_type in [MEDIA_TYPE_MUSIC, MEDIA_TYPE_TRACK]:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:playLocalList:{0}".format(media_id), None)
+                value = await self.async_call_yamaha_httpapi("setPlayerCmd:playLocalList:{0}".format(media_id), None)
                 if value != "OK":
                     _LOGGER.warning("Failed to play media type music. Device: %s, Got response: %s, Media_Id: %s", self.entity_id, value, media_id)
                     return False
@@ -1496,8 +1514,8 @@ class LinkPlayDevice(MediaPlayerEntity):
 
             if self._playing_spotify:  # disconnect from Spotify before selecting new source
                 if self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_SLOW_STREAMS):
-                    await self.async_call_linkplay_httpapi("setPlayerCmd:pause", None)
-                await self.async_call_linkplay_httpapi("setPlayerCmd:switchmode:wifi", None)
+                    await self.async_call_yamaha_httpapi("setPlayerCmd:pause", None)
+                await self.async_call_yamaha_httpapi("setPlayerCmd:switchmode:wifi", None)
 
             if temp_source == "udisk":
                 await self.async_tracklist_via_upnp("USB")
@@ -1510,9 +1528,9 @@ class LinkPlayDevice(MediaPlayerEntity):
                 temp_source_final = await self.async_detect_stream_url_redirection(temp_source)
 
                 if self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_SLOW_STREAMS) and self._state == STATE_PLAYING:
-                    await self.async_call_linkplay_httpapi("setPlayerCmd:pause", None)  #recent firmwares don't stop the previous stream while loading the new one, can take several seconds
+                    await self.async_call_yamaha_httpapi("setPlayerCmd:pause", None)  #recent firmwares don't stop the previous stream while loading the new one, can take several seconds
 
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:play:{0}".format(temp_source_final), None)
+                value = await self.async_call_yamaha_httpapi("setPlayerCmd:play:{0}".format(temp_source_final), None)
                 if value == "OK":
                     self._state = STATE_PLAYING
                     self._playing_tts = False
@@ -1537,7 +1555,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 else:
                     _LOGGER.warning("Failed to select http source and play. Device: %s, Got response: %s", self.entity_id, value)
             else:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:switchmode:{0}".format(temp_source), None)
+                value = await self.async_call_yamaha_httpapi("setPlayerCmd:switchmode:{0}".format(temp_source), None)
                 if value == "OK":
                     self._state = STATE_PLAYING
                     self._source = source
@@ -1563,7 +1581,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         if not self._slave_mode:
             mode = list(SOUND_MODES.keys())[list(
                 SOUND_MODES.values()).index(sound_mode)]
-            value = await self.async_call_linkplay_httpapi("setPlayerCmd:equalizer:{0}".format(mode), None)
+            value = await self.async_call_yamaha_httpapi("setPlayerCmd:equalizer:{0}".format(mode), None)
             if value == "OK":
                 self._sound_mode = sound_mode
                 if self._slave_list is not None:
@@ -1587,7 +1605,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     mode = '3'
                 elif self._repeat == REPEAT_MODE_ONE:
                     mode = '1'
-            value = await self.async_call_linkplay_httpapi("setPlayerCmd:loopmode:{0}".format(mode), None)
+            value = await self.async_call_yamaha_httpapi("setPlayerCmd:loopmode:{0}".format(mode), None)
             if value != "OK":
                 _LOGGER.warning("Failed to change shuffle mode. Device: %s, Got response: %s", self.entity_id, value)
         else:
@@ -1603,7 +1621,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                 mode = '2' if self._shuffle else '3'
             elif repeat == REPEAT_MODE_ONE:
                 mode = '1'
-            value = await self.async_call_linkplay_httpapi("setPlayerCmd:loopmode:{0}".format(mode), None)
+            value = await self.async_call_yamaha_httpapi("setPlayerCmd:loopmode:{0}".format(mode), None)
             if value != "OK":
                 _LOGGER.warning("Failed to change repeat mode. Device: %s, Got response: %s", self.entity_id, value)
         else:
@@ -1618,7 +1636,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         if volume > 100:
             volume = 100
 
-        value = await self.async_call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
+        value = await self.async_call_yamaha_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
 
         if value == "OK":
             self._volume = volume
@@ -1632,22 +1650,22 @@ class LinkPlayDevice(MediaPlayerEntity):
         if volume < 0:
             volume = 0
 
-        value = await self.async_call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
+        value = await self.async_call_yamaha_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
 
         if value == "OK":
             self._volume = volume
 
     async def async_set_volume_level(self, volume):
-        """Set volume level, input range 0..1, linkplay device 0..100."""
+        """Set volume level, input range 0..1, yamaha device 0..100."""
         volume = str(round(int(volume * MAX_VOL)))
-        value = await self.async_call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
+        value = await self.async_call_yamaha_httpapi("setPlayerCmd:vol:{0}".format(str(volume)), None)
 
         if value == "OK":
             self._volume = volume
 
     async def async_mute_volume(self, mute):
         """Mute (true) or unmute (false) media player."""
-        value = await self.async_call_linkplay_httpapi("setPlayerCmd:mute:{0}".format(str(int(mute))), None)
+        value = await self.async_call_yamaha_httpapi("setPlayerCmd:mute:{0}".format(str(int(mute))), None)
 
         if value == "OK":
             self._muted = bool(int(mute))
@@ -2206,7 +2224,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         if self._preset_key != None and preset != None:
             if not self._slave_mode:
                 if int(preset) > 0 and int(preset) <= self._preset_key:
-                    value = await self.async_call_linkplay_httpapi("MCUKeyShortClick:{0}".format(str(preset)), None)
+                    value = await self.async_call_yamaha_httpapi("MCUKeyShortClick:{0}".format(str(preset)), None)
                     if value != "OK":
                         _LOGGER.warning("Failed to recall preset %s. " "Device: %s, Got response: %s", self.entity_id, preset, value)
                 else:
@@ -2248,7 +2266,7 @@ class LinkPlayDevice(MediaPlayerEntity):
                     _LOGGER.debug("Multiroom: Join in multiroom mode. Master: %s, Slave: %s", self.entity_id, slave.entity_id)
                     cmd = 'ConnectMasterAp:JoinGroupMaster:eth{0}:wifi0.0.0.0'.format(self._host)
 
-                value = await slave.async_call_linkplay_httpapi(cmd, None)
+                value = await slave.async_call_yamaha_httpapi(cmd, None)
 
                 _LOGGER.debug("Multiroom: command result: %s Master: %s, Slave: %s", value, self.entity_id, slave.entity_id)
                 if value == "OK":
@@ -2288,7 +2306,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             return
 
         cmd = "multiroom:Ungroup"
-        value = await self.async_call_linkplay_httpapi(cmd, None)
+        value = await self.async_call_yamaha_httpapi(cmd, None)
         if value == "OK":
             self._is_master = False
             for slave_id in self._multiroom_group:
@@ -2323,12 +2341,12 @@ class LinkPlayDevice(MediaPlayerEntity):
                 for device in self.hass.data[DOMAIN].entities:
                     if device._is_master:    ## TODO!!!
                         cmd = "multiroom:SlaveKickout:{0}".format(self._slave_ip)
-                        value = await self._master.async_call_linkplay_httpapi(cmd, None)
+                        value = await self._master.async_call_yamaha_httpapi(cmd, None)
                         self._master._position_updated_at = utcnow()
 
         else:
             cmd = "multiroom:Ungroup"
-            value = await self.async_call_linkplay_httpapi(cmd, None)
+            value = await self.async_call_yamaha_httpapi(cmd, None)
 
         if value == "OK":
             if self._master is not None:
@@ -2366,20 +2384,20 @@ class LinkPlayDevice(MediaPlayerEntity):
     async def async_execute_command(self, command, notif):
         """Execute desired command against the player using factory API."""
         if command.startswith('MCU'):
-            value = await self.async_call_linkplay_tcpuart(command)
+            value = await self.async_call_yamaha_tcpuart(command)
         elif command == 'Reboot':
-            value = await self.async_call_linkplay_httpapi("getStatus:ip:;reboot;", None)
+            value = await self.async_call_yamaha_httpapi("getStatus:ip:;reboot;", None)
         elif command == 'PromptEnable':
-            value = await self.async_call_linkplay_httpapi("PromptEnable", None)
+            value = await self.async_call_yamaha_httpapi("PromptEnable", None)
         elif command == 'PromptDisable':
-            value = await self.async_call_linkplay_httpapi("PromptDisable", None)
+            value = await self.async_call_yamaha_httpapi("PromptDisable", None)
         elif command == 'RouterMultiroomEnable':
-            value = await self.async_call_linkplay_httpapi("setMultiroomLogic:1", None)
+            value = await self.async_call_yamaha_httpapi("setMultiroomLogic:1", None)
         elif command == 'SetRandomWifiKey':
             from random import choice
             from string import ascii_letters
             newkey = (''.join(choice(ascii_letters) for i in range(16)))
-            value = await self.async_call_linkplay_httpapi("setNetwork:1:{0}".format(newkey), None)
+            value = await self.async_call_yamaha_httpapi("setNetwork:1:{0}".format(newkey), None)
             if value == 'OK':
                 value = value + ", key: " + newkey
             else:
@@ -2387,7 +2405,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         elif command.startswith('SetApSSIDName:'):
             ssidnam = command.replace('SetApSSIDName:', '').strip()
             if ssidnam != '':
-                value = await self.async_call_linkplay_httpapi("setSSID:{0}".format(ssidnam), None)
+                value = await self.async_call_yamaha_httpapi("setSSID:{0}".format(ssidnam), None)
                 if value == 'OK':
                     value = value + ", SoftAP SSID set to: " + ssidnam
             else:
@@ -2395,7 +2413,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         elif command.startswith('WriteDeviceNameToUnit:'):
             devnam = command.replace('WriteDeviceNameToUnit:', '').strip()
             if devnam != '':
-                value = await self.async_call_linkplay_httpapi("setDeviceName:{0}".format(devnam), None)
+                value = await self.async_call_yamaha_httpapi("setDeviceName:{0}".format(devnam), None)
                 if value == 'OK':
                     self._name = devnam
                     value = value + ", name set to: " + self._name
@@ -2404,7 +2422,7 @@ class LinkPlayDevice(MediaPlayerEntity):
         elif command == 'TimeSync':
             import time
             tme = time.strftime('%Y%m%d%H%M%S')
-            value = await self.async_call_linkplay_httpapi("timeSync:{0}".format(tme), None)
+            value = await self.async_call_yamaha_httpapi("timeSync:{0}".format(tme), None)
             if value == 'OK':
                 value = value + ", time: " + tme
         elif command == 'Rescan':
@@ -2455,7 +2473,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             if self._playing_spotify:
                 if not switchinput:
                     await self.async_preset_snap_via_upnp(str(self._preset_key))
-                    await self.async_call_linkplay_httpapi("setPlayerCmd:stop", None)
+                    await self.async_call_yamaha_httpapi("setPlayerCmd:stop", None)
                 else:
                     self._snap_spotify_volumeonly = True
                 self._snap_spotify = True
@@ -2471,9 +2489,9 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._snap_volume = int(self._volume)
 
             elif switchinput and not self._playing_stream:
-                value = await self.async_call_linkplay_httpapi("setPlayerCmd:switchmode:wifi", None)
+                value = await self.async_call_yamaha_httpapi("setPlayerCmd:switchmode:wifi", None)
                 await asyncio.sleep(0.2)
-                await self.async_call_linkplay_httpapi("setPlayerCmd:stop", None)
+                await self.async_call_yamaha_httpapi("setPlayerCmd:stop", None)
                 if value == "OK":
                     await asyncio.sleep(2)  # have to wait for the sound fade-in of the unit when physical source is changed, otherwise volume value will be incorrect
                     await self.async_get_status()
@@ -2491,9 +2509,9 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._snap_volume = int(self._volume)
                 if self._playing_stream:
                     if self._fwvercheck(self._fw_ver) >= self._fwvercheck(FW_SLOW_STREAMS):
-                        await self.async_call_linkplay_httpapi("setPlayerCmd:pause", None)
+                        await self.async_call_yamaha_httpapi("setPlayerCmd:pause", None)
                     else:
-                        await self.async_call_linkplay_httpapi("setPlayerCmd:stop", None)
+                        await self.async_call_yamaha_httpapi("setPlayerCmd:stop", None)
         else:
             return
             #await self._master.async_snapshot(switchinput)
@@ -2516,7 +2534,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             if self._snap_spotify:
                 self._snap_spotify = False
                 if not self._snap_spotify_volumeonly:
-                    await self.async_call_linkplay_httpapi("MCUKeyShortClick:{0}".format(str(self._preset_key)), None)
+                    await self.async_call_yamaha_httpapi("MCUKeyShortClick:{0}".format(str(self._preset_key)), None)
                 self._snapshot_active = False
                 self._snap_spotify_volumeonly = False
                 # await self.async_schedule_update_ha_state(True)
@@ -2544,14 +2562,14 @@ class LinkPlayDevice(MediaPlayerEntity):
                 self._snap_uri = None
 
             if self._snap_volume != 0:
-                await self.async_call_linkplay_httpapi("setPlayerCmd:vol:{0}".format(str(self._snap_volume)), None)
+                await self.async_call_yamaha_httpapi("setPlayerCmd:vol:{0}".format(str(self._snap_volume)), None)
                 self._snap_volume = 0
 
             if self._snap_state in [STATE_PLAYING, STATE_PAUSED]:
                 await asyncio.sleep(0.5)
                 if self._snap_seek and self._snap_playhead_position > 0:
                     _LOGGER.debug("Seekin'")
-                    await self.async_call_linkplay_httpapi("setPlayerCmd:seek:{0}".format(str(self._snap_playhead_position)), None)
+                    await self.async_call_yamaha_httpapi("setPlayerCmd:seek:{0}".format(str(self._snap_playhead_position)), None)
                     if self._snap_state == STATE_PAUSED:
                         await self.async_media_pause()
 
@@ -2580,7 +2598,7 @@ class LinkPlayDevice(MediaPlayerEntity):
             if not index > 0:
                 return
 
-            value = await self.async_call_linkplay_httpapi("setPlayerCmd:playLocalList:{0}".format(index), None)
+            value = await self.async_call_yamaha_httpapi("setPlayerCmd:playLocalList:{0}".format(index), None)
             if value != "OK":
                 _LOGGER.warning("Failed to play media track by name. Device: %s, Got response: %s", self.entity_id, value)
                 return False
@@ -2635,10 +2653,10 @@ class LinkPlayDevice(MediaPlayerEntity):
         for sentence in sentences:
             setting, value = sentence.replace('%20', ' ').replace('%22', '').split(':')
             for tentative in range(10):
-                await self.async_call_linkplay_httpapi("YAMAHA_DATA_GET", True)
-                await self.async_call_linkplay_httpapi(f"{cmd + sentence + end}", None)
+                await self.async_call_yamaha_httpapi("YAMAHA_DATA_GET", True)
+                await self.async_call_yamaha_httpapi(f"{cmd + sentence + end}", None)
                 await asyncio.sleep(0.1 * tentative)
-                status = await self.async_call_linkplay_httpapi("YAMAHA_DATA_GET", True)
+                status = await self.async_call_yamaha_httpapi("YAMAHA_DATA_GET", True)
                 _LOGGER.debug("Received data: '%s: %s'", setting, status[setting])
                 if status[setting] == value:
                     break
