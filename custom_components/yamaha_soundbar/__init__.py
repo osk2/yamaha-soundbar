@@ -85,7 +85,7 @@ SOUND_SERVICE_SCHEMA = vol.Schema({
 
 _LOGGER = logging.getLogger(__name__)
 
-def setup(hass, config):
+async def async_setup(hass, config):
     """Handle service configuration."""
 
     async def async_service_handle(service):
