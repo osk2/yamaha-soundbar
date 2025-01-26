@@ -10,7 +10,7 @@ Tested on Yamaha YAS-109 & YAS-209, any Yamaha soundbar based on Linkplay A118 s
 
 #### 1. Install custom component
  - Using HACS
- - Install manually: copy all files in `custom_components/yamha_soundbar` to your `<config directory>/custom_components/yamaha_soundbar/` directory.
+ - Install manually: copy all files in `custom_components/yamaha_soundbar` to your `<config directory>/custom_components/yamaha_soundbar/` directory.
 
 #### 2. Restart Home-Assistant.
 #### 3. Add the configuration to your configuration.yaml.
