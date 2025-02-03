@@ -44,10 +44,8 @@ from homeassistant.components.media_player import (
     PLATFORM_SCHEMA,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
-    MediaPlayerState,
     MediaType,
     MediaPlayerDeviceClass,
-    BrowseMedia,
 )
 
 from homeassistant.components import media_source
@@ -59,14 +57,8 @@ from homeassistant.components.media_player.const import (
     ATTR_GROUP_MEMBERS,
     ATTR_MEDIA_CONTENT_ID,
     ATTR_MEDIA_ANNOUNCE,
-    MEDIA_TYPE_MUSIC,
-    MEDIA_TYPE_URL,
-    MEDIA_TYPE_TRACK,
-    MEDIA_CLASS_DIRECTORY,
-    MEDIA_CLASS_MUSIC,
-    REPEAT_MODE_ALL,
-    REPEAT_MODE_OFF,
-    REPEAT_MODE_ONE,
+    MediaType,
+    RepeatMode,
 )
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -343,7 +335,7 @@ class YamahaDevice(MediaPlayerEntity):
         self._spotify_paused_at = None
         self._idletime_updated_at = None
         self._shuffle = False
-        self._repeat = REPEAT_MODE_OFF
+        self._repeat = RepeatMode.OFF
         self._media_album = None
         self._media_artist = None
         self._media_prev_artist = None
@@ -660,11 +652,11 @@ class YamahaDevice(MediaPlayerEntity):
             }.get(self._player_statdata['loop'], False)
 
             self._repeat = {
-                '0': REPEAT_MODE_ALL,
-                '1': REPEAT_MODE_ONE,
-                '2': REPEAT_MODE_ALL,
-                '5': REPEAT_MODE_ONE,
-            }.get(self._player_statdata['loop'], REPEAT_MODE_OFF)
+                '0': RepeatMode.ALL,
+                '1': RepeatMode.ONE,
+                '2': RepeatMode.ALL,
+                '5': RepeatMode.ONE,
+            }.get(self._player_statdata['loop'], RepeatMode.OFF)
 
             # self._state = {
                 # 'stop': STATE_IDLE,
@@ -1086,8 +1078,8 @@ class YamahaDevice(MediaPlayerEntity):
 
     @property
     def media_content_type(self):
-        """Content type of current playing media. Has to be MEDIA_TYPE_MUSIC in order for Lovelace to show both artist and title."""
-        return MEDIA_TYPE_MUSIC
+        """Content type of current playing media. Has to be MediaType.MUSIC in order for Lovelace to show both artist and title."""
+        return MediaType.MUSIC
 
     @property
     def media_content_id(self):
@@ -1375,8 +1367,8 @@ class YamahaDevice(MediaPlayerEntity):
         _LOGGER.debug("Trying to play media. Device: %s, Media_type: %s, Media_id: %s", self.entity_id, media_type, media_id)
         if not self._slave_mode:
 
-            if not (media_type in [MEDIA_TYPE_MUSIC, MEDIA_TYPE_URL, MEDIA_TYPE_TRACK] or media_source.is_media_source_id(media_id)):
-                _LOGGER.warning("For: %s Invalid media type %s. Only %s and %s is supported", self._name, media_type, MEDIA_TYPE_MUSIC, MEDIA_TYPE_URL)
+            if not (media_type in [MediaType.MUSIC, MediaType.URL, MediaType.TRACK] or media_source.is_media_source_id(media_id)):
+                _LOGGER.warning("For: %s Invalid media type %s. Only %s and %s is supported", self._name, media_type, MediaType.MUSIC, MediaType.URL)
                 await self.async_media_stop()
                 return False
 
@@ -1440,7 +1432,7 @@ class YamahaDevice(MediaPlayerEntity):
             media_id_check = media_id.lower()
 
             if media_id_check.startswith('http'):
-                media_type = MEDIA_TYPE_URL
+                media_type = MediaType.URL
 
             if media_id_check.find('8095/media_player') != -1:  # Music Assistant exception, not to be treated by server redirect checker and other metadata parsers
                 self._playing_mass = True
@@ -1455,7 +1447,7 @@ class YamahaDevice(MediaPlayerEntity):
                 _LOGGER.debug("For: %s, Detected PLS list: %s", self._name, media_id)
                 media_id = await self.async_parse_pls_url(media_id)
 
-            if media_type == MEDIA_TYPE_URL:
+            if media_type == MediaType.URL:
                 if self._playing_mediabrowser or self._playing_mass:
                     media_id_final = media_id
                 else:
@@ -1472,7 +1464,7 @@ class YamahaDevice(MediaPlayerEntity):
                     _LOGGER.warning("Failed to play media type URL. Device: %s, Got response: %s, Media_Id: %s", self.entity_id, value, media_id)
                     return False
 
-            elif media_type in [MEDIA_TYPE_MUSIC, MEDIA_TYPE_TRACK]:
+            elif media_type in [MediaType.MUSIC, MediaType.TRACK]:
                 value = await self.async_call_yamaha_httpapi("setPlayerCmd:playLocalList:{0}".format(media_id), None)
                 if value != "OK":
                     _LOGGER.warning("Failed to play media type music. Device: %s, Got response: %s, Media_Id: %s", self.entity_id, value, media_id)
@@ -1491,10 +1483,10 @@ class YamahaDevice(MediaPlayerEntity):
             self._media_image_url = None
             self._ice_skip_throt = True
             self._unav_throttle = False
-            if media_type == MEDIA_TYPE_URL:
+            if media_type == MediaType.URL:
                 self._media_uri = media_id
                 self._media_uri_final = media_id_final
-            elif media_type == MEDIA_TYPE_MUSIC:
+            elif media_type == MediaType.MUSIC:
                 self._media_uri = None
                 self._media_uri_final = None
             if self._announce:
@@ -1600,11 +1592,11 @@ class YamahaDevice(MediaPlayerEntity):
                 self._shuffle = shuffle
                 mode = '2'
             else:
-                if self._repeat == REPEAT_MODE_OFF:
+                if self._repeat == RepeatMode.OFF:
                     mode = '0'
-                elif self._repeat == REPEAT_MODE_ALL:
+                elif self._repeat == RepeatMode.ALL:
                     mode = '3'
-                elif self._repeat == REPEAT_MODE_ONE:
+                elif self._repeat == RepeatMode.ONE:
                     mode = '1'
             value = await self.async_call_yamaha_httpapi("setPlayerCmd:loopmode:{0}".format(mode), None)
             if value != "OK":
@@ -1616,11 +1608,11 @@ class YamahaDevice(MediaPlayerEntity):
         """Change the repeat mode."""
         if not self._slave_mode:
             self._repeat = repeat
-            if repeat == REPEAT_MODE_OFF:
+            if repeat == RepeatMode.OFF:
                 mode = '0'
-            elif repeat == REPEAT_MODE_ALL:
+            elif repeat == RepeatMode.ALL:
                 mode = '2' if self._shuffle else '3'
-            elif repeat == REPEAT_MODE_ONE:
+            elif repeat == RepeatMode.ONE:
                 mode = '1'
             value = await self.async_call_yamaha_httpapi("setPlayerCmd:loopmode:{0}".format(mode), None)
             if value != "OK":
@@ -2558,7 +2550,7 @@ class YamahaDevice(MediaPlayerEntity):
                 self._media_uri = self._snap_uri
                 self._nometa = self._snap_nometa
                 if self._snap_state in [STATE_PLAYING, STATE_PAUSED]:  # self._media_uri.find('tts_proxy') == -1
-                    await self.async_play_media(MEDIA_TYPE_URL, self._media_uri)
+                    await self.async_play_media(MediaType.URL, self._media_uri)
                 self._snapshot_active = False
                 self._snap_uri = None
 
@@ -2837,48 +2829,4 @@ class YamahaDevice(MediaPlayerEntity):
             media_content_id,
             content_filter=lambda item: item.media_content_type.startswith("audio/"),
         )
-
-        #TODO: combide the BrowseMedia Media Sources above with the BrowseMedia Directory below
-        #if "udisk" in self._source_list:
-        # if media_content_id not in (None, "root"):
-            # raise BrowseError(
-                # f"Media not found: {media_content_type} / {media_content_id}"
-            # )
-
-        # source_media_name = self._source_list.get("udisk", "USB Disk")
-
-        # if len(self._trackq) > 0:
-            # radio = [
-                # BrowseMedia(
-                    # title = preset,
-                    # media_class = MEDIA_CLASS_MUSIC,
-                    # media_content_id = index,
-                    # media_content_type = MEDIA_TYPE_MUSIC,
-                    # can_play = True,
-                    # can_expand = False,
-                # )
-                # for index, preset in enumerate(self._trackq, start=1)
-            # ]
-
-            # root = BrowseMedia(
-                # title=self._name + " " + source_media_name,
-                # media_class = MEDIA_CLASS_DIRECTORY,
-                # media_content_id = "root",
-                # media_content_type = "listing",
-                # can_play = False,
-                # can_expand = True,
-                # children = radio,
-            # )
-
-        # else:
-            # root = BrowseMedia(
-                # title=self._name + " " + source_media_name,
-                # media_class = MEDIA_CLASS_DIRECTORY,
-                # media_content_id = "root",
-                # media_content_type = "listing",
-                # can_play = False,
-                # can_expand = False,
-            # )
-
-        # return root
-#END
+        
