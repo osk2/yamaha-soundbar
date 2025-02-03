@@ -226,12 +226,12 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     uuid = config.get(CONF_UUID)
 
     state = STATE_IDLE
-
+    loop = asyncio.get_event_loop()
     initurl = "https://{0}/httpapi.asp?command=getStatusEx".format(host)
     dirname = os.path.dirname(__file__)
     certpath = os.path.join(dirname, CONF_CERT_FILENAME)
-    ssl_ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
-    ssl_ctx.load_cert_chain(certfile=certpath)
+    ssl_ctx = await loop.run_in_executor(None, ssl.create_default_context, ssl.Purpose.SERVER_AUTH)
+    await loop.run_in_executor(None, ssl_ctx.load_cert_chain, certpath)
     ssl_ctx.check_hostname = False
     ssl_ctx.verify_mode = ssl.CERT_NONE
     conn = aiohttp.TCPConnector(ssl_context=ssl_ctx)
@@ -422,10 +422,11 @@ class YamahaDevice(MediaPlayerEntity):
             timeout = API_TIMEOUT
 
         try:
+            loop = asyncio.get_event_loop()
             dirname = os.path.dirname(__file__)
             certpath = os.path.join(dirname, CONF_CERT_FILENAME)
-            ssl_ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
-            ssl_ctx.load_cert_chain(certfile=certpath)
+            ssl_ctx = await loop.run_in_executor(None, ssl.create_default_context, ssl.Purpose.SERVER_AUTH)
+            await loop.run_in_executor(None, ssl_ctx.load_cert_chain, certpath)
             ssl_ctx.check_hostname = False
             ssl_ctx.verify_mode = ssl.CERT_NONE
             conn = aiohttp.TCPConnector(ssl_context=ssl_ctx)
