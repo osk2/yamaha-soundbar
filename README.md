@@ -8,6 +8,8 @@ Tested on Yamaha YAS-109 & YAS-209, any Yamaha soundbar based on Linkplay A118 s
 
 ## Installation
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=osk2&repository=yamaha-soundbar&category=integration)
+
 #### 1. Install custom component
  - Using HACS
  - Install manually: copy all files in `custom_components/yamaha_soundbar` to your `<config directory>/custom_components/yamaha_soundbar/` directory.
