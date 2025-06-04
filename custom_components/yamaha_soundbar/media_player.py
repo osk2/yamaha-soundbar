@@ -1681,7 +1681,7 @@ class YamahaDevice(MediaPlayerEntity):
         _LOGGER.warning("Turning on device: %s", self._state)
         await self.async_set_sound({"power_saving": "0"})
         self._state = STATE_ON
-        self._manually_turned_off = True 
+        self._manually_turned_off = False
 
     async def async_turn_off(self):
         _LOGGER.warning("Turning off device: %s", self._state)
