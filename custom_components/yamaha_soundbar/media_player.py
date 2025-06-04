@@ -59,6 +59,7 @@ from homeassistant.components.media_player.const import (
     ATTR_MEDIA_ANNOUNCE,
     MediaType,
     RepeatMode,
+    MediaPlayerState,
 )
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -71,6 +72,8 @@ from homeassistant.const import (
     STATE_PLAYING,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
+    STATE_OFF,
+    STATE_ON,
 )
 
 from . import DOMAIN, ATTR_MASTER
@@ -390,6 +393,7 @@ class YamahaDevice(MediaPlayerEntity):
         self._snap_media_source_uri = None
         self._snap_seek = False
         self._snap_playhead_position = 0
+        self._manually_turned_off = False
 
         # Listen for Music Assistant bus events
         hass.bus.async_listen("mass_event", self.handle_event)
@@ -664,19 +668,21 @@ class YamahaDevice(MediaPlayerEntity):
                 # 'play': STATE_PLAYING,
                 # 'pause': STATE_PAUSED,
             # }.get(self._player_statdata['status'], STATE_IDLE)
-
-            if (self._player_statdata['mode'] in ['-1', '0'] or self._player_statdata['status'] == 'stop'):
-                if utcnow() >= (self._idletime_updated_at + AUTOIDLE_STATE_TIMEOUT):
-                    self._state = STATE_IDLE
-                    self._media_uri_final = None
-                    self._media_uri = None
+            if self._manually_turned_off:
+                self._state = STATE_OFF
+            else:
+                if (self._player_statdata['mode'] in ['-1', '0'] or self._player_statdata['status'] == 'stop'):
+                    if utcnow() >= (self._idletime_updated_at + AUTOIDLE_STATE_TIMEOUT):
+                        self._state = STATE_IDLE
+                        self._media_uri_final = None
+                        self._media_uri = None
+                        #_LOGGER.debug("05 DETECTED %s, %s", self.entity_id, self._state)
+                elif self._player_statdata['status'] in ['play', 'load']:
+                    self._state = STATE_PLAYING
                     #_LOGGER.debug("05 DETECTED %s, %s", self.entity_id, self._state)
-            elif self._player_statdata['status'] in ['play', 'load']:
-                self._state = STATE_PLAYING
-                #_LOGGER.debug("05 DETECTED %s, %s", self.entity_id, self._state)
-            elif self._player_statdata['status'] == 'pause':
-                self._state = STATE_PAUSED
-                #_LOGGER.debug("05 DETECTED %s, %s", self.entity_id, self._state)
+                elif self._player_statdata['status'] == 'pause':
+                    self._state = STATE_PAUSED
+                    #_LOGGER.debug("05 DETECTED %s, %s", self.entity_id, self._state)
 
             self._mass_position = int(int(self._player_statdata['curpos']) / 1000)
 
@@ -971,6 +977,8 @@ class YamahaDevice(MediaPlayerEntity):
                     | MediaPlayerEntityFeature.SHUFFLE_SET 
                     | MediaPlayerEntityFeature.REPEAT_SET 
                     | MediaPlayerEntityFeature.SEEK
+                    | MediaPlayerEntityFeature.TURN_OFF
+                    | MediaPlayerEntityFeature.TURN_ON
                 )
             else:
                 self._features = (
@@ -989,6 +997,8 @@ class YamahaDevice(MediaPlayerEntity):
                     | MediaPlayerEntityFeature.PREVIOUS_TRACK 
                     | MediaPlayerEntityFeature.SHUFFLE_SET 
                     | MediaPlayerEntityFeature.REPEAT_SET
+                    | MediaPlayerEntityFeature.TURN_OFF
+                    | MediaPlayerEntityFeature.TURN_ON
                 )
 
         elif self._playing_stream or self._playing_mediabrowser:
@@ -1005,6 +1015,8 @@ class YamahaDevice(MediaPlayerEntity):
                 | MediaPlayerEntityFeature.PLAY 
                 | MediaPlayerEntityFeature.PAUSE
                 | MediaPlayerEntityFeature.SEEK
+                | MediaPlayerEntityFeature.TURN_OFF
+                | MediaPlayerEntityFeature.TURN_ON
                 )
 
         elif self._playing_liveinput:
@@ -1018,6 +1030,8 @@ class YamahaDevice(MediaPlayerEntity):
                 | MediaPlayerEntityFeature.VOLUME_STEP 
                 | MediaPlayerEntityFeature.VOLUME_MUTE 
                 | MediaPlayerEntityFeature.STOP
+                | MediaPlayerEntityFeature.TURN_OFF
+                | MediaPlayerEntityFeature.TURN_ON
                 )
 
         return self._features
@@ -1664,16 +1678,24 @@ class YamahaDevice(MediaPlayerEntity):
             self._muted = bool(int(mute))
 
     async def async_turn_on(self):
-        """Use Mune/Unmute instead, because power is not supported."""
-        await self.async_mute_volume(False)
+        _LOGGER.warning("Turning on device: %s", self._state)
+        await self.async_set_sound({"power_saving": "0"})
+        self._state = STATE_ON
+        self._manually_turned_off = True 
 
     async def async_turn_off(self):
-        """Use Mune/Unmute instead, because power is not supported."""
-        await self.async_mute_volume(True)
+        _LOGGER.warning("Turning off device: %s", self._state)
+        await self.async_set_sound({"power_saving": "1"})
+        self._state = STATE_OFF
+        self._manually_turned_off = False
 
     async def async_toggle(self):
-        """Use Mune/Unmute instead, because power is not supported."""
-        await self.async_mute_volume(not self._muted)
+        """Toggle the power state of the device."""
+        _LOGGER.warning("Toggle Device status: %s", self._state)
+        if self._state != STATE_OFF:
+            await self.async_turn_off()
+        else:
+            await self.async_turn_on()
 
     async def call_update_lastfm(self, cmd, params):
         """Update LastFM metadata."""
@@ -2625,8 +2647,8 @@ class YamahaDevice(MediaPlayerEntity):
         bass_extension = settings.get('bass_extension', None)
         mute = settings.get('mute', None)
         power_saving = settings.get('power_saving', None)
-        cmd = "YAMAHA_DATA_SET:{"
-        end = '}'
+        cmd = "YAMAHA_DATA_SET:%7B"
+        end = '%7D'
         sentences = []
         if subwoofer_volume is not None:
             sentences.append(f"%22subwoofer%20volume%22:%22{subwoofer_volume}%22")
@@ -2639,14 +2661,16 @@ class YamahaDevice(MediaPlayerEntity):
         if mute is not None:
             sentences.append(f"%22mute%22:%22{int(mute)}%22")
         if power_saving is not None:
-            sentences.append(f"%22power%20saving%22:%22{int(power_saving)}%22")
+            sentences.append(f"%22power%20saving%22:%22{power_saving}%22")
         if sound_program is not None:
             sentences.append(f"%22sound%20program%22:%22{sound_program.replace(' ', '%20')}%22")
 
+        _LOGGER.warning("Setting sound settings: %s", sentences)
         for sentence in sentences:
             setting, value = sentence.replace('%20', ' ').replace('%22', '').split(':')
             for tentative in range(10):
                 await self.async_call_yamaha_httpapi("YAMAHA_DATA_GET", True)
+                _LOGGER.info("cmd: %s %s %s", cmd, sentence, end)
                 await self.async_call_yamaha_httpapi(f"{cmd + sentence + end}", None)
                 await asyncio.sleep(0.1 * tentative)
                 status = await self.async_call_yamaha_httpapi("YAMAHA_DATA_GET", True)
