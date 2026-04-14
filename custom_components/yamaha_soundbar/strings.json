@@ -1,0 +1,38 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add Yamaha Soundbar",
+        "description": "Enter the IP address of your Yamaha soundbar.",
+        "data": {
+          "host": "Host",
+          "name": "Name (optional, auto-detected from device)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the device. Check the IP address and make sure the soundbar is on."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Yamaha Soundbar Options",
+        "data": {
+          "sources": "Sources (format: HDMI:TV, optical:Plexamp)",
+          "common_sources": "Common sources (format: key:name, ...)",
+          "source_ignore": "Ignored sources (comma-separated)",
+          "icecast_metadata": "Icecast metadata",
+          "multiroom_wifidirect": "Multiroom Wi-Fi Direct",
+          "led_off": "LED off",
+          "volume_step": "Volume step (1-25)",
+          "announce_volume_increase": "Announce volume increase (0-50)",
+          "lastfm_api_key": "Last.fm API key"
+        }
+      }
+    }
+  }
+}

@@ -8,7 +8,6 @@ https://github.com/osk2/yamaha-soundbar
 import asyncio
 from asyncio import CancelledError
 import async_timeout
-import voluptuous as vol
 import os
 
 from datetime import timedelta
@@ -32,19 +31,19 @@ import re
 import struct
 import chardet
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.util import Throttle
 from homeassistant.util.dt import utcnow
 from homeassistant.helpers.aiohttp_client import (
     async_get_clientsession,
     async_create_clientsession,
 )
-import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from homeassistant.components.media_player import (
-    PLATFORM_SCHEMA,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
-    MediaType,
     MediaPlayerDeviceClass,
 )
 
@@ -62,18 +61,55 @@ from homeassistant.components.media_player.const import (
 )
 from homeassistant.const import (
     ATTR_ENTITY_ID,
-    ATTR_DEVICE_CLASS,
     CONF_HOST,
     CONF_NAME,
-    CONF_PORT,
     STATE_IDLE,
     STATE_PAUSED,
     STATE_PLAYING,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
 )
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from . import DOMAIN, ATTR_MASTER
+from .const import (
+    DOMAIN,
+    signal_device_updated,
+    ATTR_MASTER,
+    ATTR_SLAVE,
+    ATTR_YAMAHA_GROUP,
+    ATTR_FWVER,
+    ATTR_TRCNT,
+    ATTR_TRCRT,
+    ATTR_UUID,
+    ATTR_TTS,
+    ATTR_SNAPSHOT,
+    ATTR_SNAPSPOT,
+    ATTR_DEBUG,
+    ATTR_MASS_POSITION,
+    ATTR_SOUND_PROGRAM,
+    ATTR_SUBWOOFER_VOLUME,
+    ATTR_SURROUND,
+    ATTR_CLEAR_VOICE,
+    ATTR_BASS_EXTENSION,
+    ATTR_POWER_SAVING,
+    CONF_SOURCE_IGNORE,
+    CONF_LASTFM_API_KEY,
+    CONF_SOURCES,
+    CONF_COMMONSOURCES,
+    CONF_ICECAST_METADATA,
+    CONF_MULTIROOM_WIFIDIRECT,
+    CONF_VOLUME_STEP,
+    CONF_LEDOFF,
+    CONF_UUID,
+    CONF_ANNOUNCE_VOLUME_INCREASE,
+    CONF_CERT_FILENAME,
+    DEFAULT_ICECAST_UPDATE,
+    DEFAULT_MULTIROOM_WIFIDIRECT,
+    DEFAULT_LEDOFF,
+    DEFAULT_VOLUME_STEP,
+    DEFAULT_ANNOUNCE_VOLUME_INCREASE,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -84,43 +120,6 @@ ICON_MULTIROOM = 'mdi:speaker-multiple'
 ICON_BLUETOOTH = 'mdi:speaker-bluetooth'
 ICON_PUSHSTREAM = 'mdi:cast-audio'
 ICON_TTS = 'mdi:text-to-speech'
-
-ATTR_SLAVE = 'slave'
-ATTR_YAMAHA_GROUP = 'yamaha_group'
-ATTR_FWVER = 'firmware'
-ATTR_TRCNT = 'tracks_local'
-ATTR_TRCRT = 'track_current'
-ATTR_UUID = 'uuid'
-ATTR_TTS = 'tts_active'
-ATTR_SNAPSHOT = 'snapshot_active'
-ATTR_SNAPSPOT = 'snapshot_spotify'
-ATTR_DEBUG = 'debug_info'
-ATTR_MASS_POSITION = 'media_position_mass'
-ATTR_SOUND_PROGRAM = 'sound_program'
-ATTR_SUBWOOFER_VOLUME = 'subwoofer_volume'
-ATTR_SURROUND = 'surround'
-ATTR_CLEAR_VOICE = 'clear_voice'
-ATTR_BASS_EXTENSION = 'bass_extension'
-ATTR_POWER_SAVING = 'power_saving'
-
-CONF_NAME = 'name'
-CONF_SOURCE_IGNORE = "source_ignore"
-CONF_LASTFM_API_KEY = 'lastfm_api_key'
-CONF_SOURCES = 'sources'
-CONF_COMMONSOURCES = 'common_sources'
-CONF_ICECAST_METADATA = 'icecast_metadata'
-CONF_MULTIROOM_WIFIDIRECT = 'multiroom_wifidirect'
-CONF_VOLUME_STEP = 'volume_step'
-CONF_LEDOFF = 'led_off'
-CONF_UUID = 'uuid'
-CONF_ANNOUNCE_VOLUME_INCREASE = 'announce_volume_increase'
-CONF_CERT_FILENAME = 'client.pem'
-
-DEFAULT_ICECAST_UPDATE = 'StationName'
-DEFAULT_MULTIROOM_WIFIDIRECT = False
-DEFAULT_LEDOFF = False
-DEFAULT_VOLUME_STEP = 5
-DEFAULT_ANNOUNCE_VOLUME_INCREASE = 15
 
 DEBUGSTR_ATTR = True
 LASTFM_API_BASE = 'http://ws.audioscrobbler.com/2.0/?method='
@@ -147,6 +146,8 @@ AUTOIDLE_STATE_TIMEOUT = timedelta(seconds=2)
 CUT_EXTENSIONS = ['mp3', 'mp2', 'm2a', 'mpg', 'wav', 'aac', 'flac', 'flc', 'm4a', 'ape', 'wma', 'ac3', 'ogg']
 
 SOUND_MODES = {'0': 'Normal', '1': 'Classic', '2': 'Pop', '3': 'Jazz', '4': 'Vocal'}
+
+YAMAHA_SOUND_PROGRAMS = ['music', 'sports', 'tv program', 'game', 'movie', 'stereo']
 
 
 def _as_bool_or_raw(value):
@@ -186,8 +187,9 @@ def _normalize_sound_value(value):
     return str(value)
 
 SOURCES = {'bluetooth': 'Bluetooth',
-           'optical': 'Optical',
-           'HDMI': 'HDMI'}
+           'optical': 'TV',
+           'HDMI': 'HDMI',
+           'wifi': 'NET'}
            
 SOURCES_MAP = {'-1': 'Idle',
                '0': 'Idle',
@@ -220,109 +222,14 @@ SOURCES_LIVEIN = ['-1', '0', '40', '41', '43', '44', '45', '46', '47', '48', '49
 SOURCES_STREAM = ['1', '2', '3', '10', '30']
 SOURCES_LOCALF = ['11', '16', '20', '21', '52', '60']
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_HOST): cv.string,
-        vol.Required(CONF_NAME): cv.string,
-        vol.Optional(CONF_ICECAST_METADATA, default=DEFAULT_ICECAST_UPDATE): vol.In(['Off', 'StationName', 'StationNameSongTitle']),
-        vol.Optional(CONF_MULTIROOM_WIFIDIRECT, default=DEFAULT_MULTIROOM_WIFIDIRECT): cv.boolean,
-        vol.Optional(CONF_LEDOFF, default=DEFAULT_LEDOFF): cv.boolean,
-        vol.Optional(CONF_SOURCES): cv.ensure_list,
-        vol.Optional(CONF_COMMONSOURCES): cv.ensure_list,
-        vol.Optional(CONF_LASTFM_API_KEY): cv.string,
-        vol.Optional(CONF_UUID, default=''): cv.string,
-        vol.Optional(CONF_SOURCE_IGNORE, default=[]): vol.All( cv.ensure_list, [cv.string]),
-        vol.Optional(CONF_VOLUME_STEP, default=DEFAULT_VOLUME_STEP): vol.All(int, vol.Range(min=1, max=25)),
-        vol.Optional(CONF_ANNOUNCE_VOLUME_INCREASE, default=DEFAULT_ANNOUNCE_VOLUME_INCREASE): vol.All(int, vol.Range(min=0, max=50)),
-    }
-)
-
-class YamahaData:
-    """Storage class for platform global data."""
-    def __init__(self):
-        """Initialize the data."""
-        self.entities = []
-
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    """Set up the YamahaDevice platform."""
-
-    if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = YamahaData()
-
-    name = config.get(CONF_NAME)
-    host = config.get(CONF_HOST)
-    sources = config.get(CONF_SOURCES)
-    common_sources = config.get(CONF_COMMONSOURCES)
-    icecast_metadata = config.get(CONF_ICECAST_METADATA)
-    multiroom_wifidirect = config.get(CONF_MULTIROOM_WIFIDIRECT)
-    led_off = config.get(CONF_LEDOFF)
-    volume_step = config.get(CONF_VOLUME_STEP)
-    announce_volume_increase = config.get(CONF_ANNOUNCE_VOLUME_INCREASE)
-    lastfm_api_key = config.get(CONF_LASTFM_API_KEY)
-    uuid = config.get(CONF_UUID)
-
-    state = STATE_IDLE
-    loop = asyncio.get_event_loop()
-    initurl = "https://{0}/httpapi.asp?command=getStatusEx".format(host)
-    dirname = os.path.dirname(__file__)
-    certpath = os.path.join(dirname, CONF_CERT_FILENAME)
-    ssl_ctx = await loop.run_in_executor(None, ssl.create_default_context, ssl.Purpose.SERVER_AUTH)
-    await loop.run_in_executor(None, ssl_ctx.load_cert_chain, certpath)
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
-    conn = aiohttp.TCPConnector(ssl_context=ssl_ctx)
-
-    try:
-        websession = aiohttp.ClientSession(connector=conn)
-        response = await websession.get(initurl)
-
-        if response.status == HTTPStatus.OK:
-            data = await response.json(content_type=None)
-            _LOGGER.debug("HOST: %s DATA response: %s", host, data)
-
-            try:
-                uuid = data['uuid']
-            except KeyError:
-                pass
-
-            if name == None:
-                try:
-                    name = data['DeviceName']
-                except KeyError:
-                    pass
-
-        else:
-            _LOGGER.warning(
-                "Get Status UUID failed, response code: %s Full message: %s",
-                response.status,
-                response,
-            )
-            state = STATE_UNAVAILABLE
-
-    except (asyncio.TimeoutError, aiohttp.ClientError) as error:
-        _LOGGER.warning(
-            "Failed communicating with YamahaDevice (start) '%s': uuid: %s %s", host, uuid, type(error)
-        )
-        state = STATE_UNAVAILABLE
-
-    finally:
-        await websession.close()
-
-    yamaha = YamahaDevice(name,
-                            host,
-                            sources,
-                            common_sources,
-                            icecast_metadata,
-                            multiroom_wifidirect,
-                            led_off,
-                            volume_step,
-                            announce_volume_increase,
-                            lastfm_api_key,
-                            uuid,
-                            state,
-                            hass)
-
-    async_add_entities([yamaha])
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    device = hass.data[DOMAIN].get(entry.entry_id)
+    if device is not None:
+        async_add_entities([device])
 
 class YamahaDevice(MediaPlayerEntity):
     """YamahaDevice Player Object."""
@@ -340,9 +247,12 @@ class YamahaDevice(MediaPlayerEntity):
                  lastfm_api_key,
                  uuid,
                  state,
-                 hass):
-        """Initialize the media player."""
+                 hass,
+                 entry=None):
+        self._entry = entry
         self._uuid = uuid
+        self._attr_unique_id = uuid if uuid else None
+        self._poll_fail_count = 0
         self._fw_ver = '1.0.0'
         self._mcu_ver = ''
         requester = AiohttpRequester(UPNP_TIMEOUT)
@@ -362,14 +272,23 @@ class YamahaDevice(MediaPlayerEntity):
         self._fadevol = False
         self._source = None
         self._prev_source = None
-        if sources is not None and sources != {}:
-            self._source_list = loads(dumps(sources).strip('[]'))
+        if sources and isinstance(sources, dict):
+            self._source_list = dict(sources)
+        elif sources and isinstance(sources, list):
+            merged = {}
+            for item in sources:
+                if isinstance(item, dict):
+                    merged.update(item)
+            self._source_list = merged if merged else SOURCES.copy()
         else:
             self._source_list = SOURCES.copy()
-        if common_sources is not None and common_sources != {}:
-            commonsources = loads(dumps(common_sources).strip('[]'))
-            localsources = self._source_list
-            self._source_list = {**localsources, **commonsources}
+        if common_sources:
+            if isinstance(common_sources, dict):
+                self._source_list.update(common_sources)
+            elif isinstance(common_sources, list):
+                for item in common_sources:
+                    if isinstance(item, dict):
+                        self._source_list.update(item)
         self._sound_mode = None
         self._muted = False
         self._playhead_position = 0
@@ -441,8 +360,23 @@ class YamahaDevice(MediaPlayerEntity):
         hass.bus.async_listen("mass_event", self.handle_event)
 
     async def async_added_to_hass(self):
-        """Record entity."""
-        self.hass.data[DOMAIN].entities.append(self)
+        self.hass.data[DOMAIN]["entities"].append(self)
+
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        if not self._uuid:
+            return None
+        sw = self._fw_ver
+        if self._mcu_ver:
+            sw = f"{self._fw_ver} / MCU {self._mcu_ver}"
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._uuid)},
+            name=self._name,
+            manufacturer="Yamaha",
+            model="Linkplay A118 Soundbar",
+            sw_version=sw,
+            configuration_url=f"http://{self._host}",
+        )
 
     def handle_event(self, event):
         """Retrieve events from Music Assistant through the event bus."""
@@ -534,7 +468,10 @@ class YamahaDevice(MediaPlayerEntity):
     async def async_get_status(self):
         resp = await self.async_call_yamaha_httpapi("getPlayerStatus", True)
         if resp is False:
-            _LOGGER.debug('Unable to connect to device: %s, %s', self.entity_id, self._name)
+            self._poll_fail_count += 1
+            _LOGGER.debug('Unable to connect to device (attempt %d): %s, %s', self._poll_fail_count, self.entity_id, self._name)
+            if self._poll_fail_count < 3:
+                return
             self._state = STATE_UNAVAILABLE
             self._unav_throttle = True
             self._playhead_position = None
@@ -560,10 +497,17 @@ class YamahaDevice(MediaPlayerEntity):
             self._sound_statdata = {}
             self._sound_statdata_updated_at = None
             return
+        self._poll_fail_count = 0
         self._player_statdata = resp.copy()
 
     async def async_trigger_schedule_update(self, before):
         await self.async_schedule_update_ha_state(before)
+
+    def _fire_device_updated(self) -> None:
+        if self._entry is not None:
+            async_dispatcher_send(
+                self.hass, signal_device_updated(self._entry.entry_id)
+            )
 
     async def async_update(self):
         """Update state."""
@@ -589,6 +533,7 @@ class YamahaDevice(MediaPlayerEntity):
                 self._media_uri_final = None
                 self._media_image_url = None
                 self._state = STATE_IDLE
+                self._fire_device_updated()
                 return True
             else:
                 self._multiroom_unjoinat = None
@@ -599,6 +544,7 @@ class YamahaDevice(MediaPlayerEntity):
 #                await self.async_restore_previous_source()
                 await self.async_select_source(self._multiroom_prevsrc)
                 self._multiroom_prevsrc = None
+                self._fire_device_updated()
                 return True
 
         if self._unav_throttle:
@@ -673,7 +619,7 @@ class YamahaDevice(MediaPlayerEntity):
                             url = "http://{0}:49152/description.xml".format(self._host)
                             try:
                                 self._upnp_device = await self._factory.async_create_device(url)
-                            except:
+                            except Exception as error:
                                 _LOGGER.warning(
                                     "Failed communicating with Yamaha (UPnP) '%s': %s", self._name, type(error)
                                 )
@@ -702,7 +648,10 @@ class YamahaDevice(MediaPlayerEntity):
 
             #_LOGGER.debug("04 Update VOL, Shuffle, Repeat, STATE %s, %s", self.entity_id, self._name)
             self._volume = self._player_statdata['vol']
-            self._muted = bool(int(self._player_statdata['mute']))
+            if isinstance(self._sound_statdata, dict) and 'mute' in self._sound_statdata:
+                self._muted = bool(int(self._sound_statdata['mute']))
+            else:
+                self._muted = bool(int(self._player_statdata['mute']))
             self._sound_mode = SOUND_MODES.get(self._player_statdata['eq'])
 
             self._shuffle = {
@@ -839,6 +788,7 @@ class YamahaDevice(MediaPlayerEntity):
                 if utcnow() >= (self._spotify_paused_at + SPOTIFY_PAUSED_TIMEOUT):
                     # Prevent sticking in Pause mode for a long time (Spotify doesn't have a stop button on the app)
                     await self.async_media_stop()
+                    self._fire_device_updated()
                     return
 
             if self._player_statdata['mode'] in ['11', '16'] and len(self._trackq) <= 0:
@@ -920,6 +870,7 @@ class YamahaDevice(MediaPlayerEntity):
         else:
             _LOGGER.error("Erroneous JSON during update and process self._player_statdata: %s, %s", self.entity_id, self._name)
 
+        self._fire_device_updated()
         return True
 
     @property
@@ -927,7 +878,7 @@ class YamahaDevice(MediaPlayerEntity):
         """Return the name of the device."""
         if self._slave_mode:
             for dev in self._multiroom_group:
-                for device in self.hass.data[DOMAIN].entities:
+                for device in self.hass.data[DOMAIN]["entities"]:
                     if device._is_master:
                         return self._name + ' [' + device._name + ']'
         else:
@@ -986,25 +937,22 @@ class YamahaDevice(MediaPlayerEntity):
 
     @property
     def source_list(self):
-        """Return the list of available input sources. If only one source exists, don't show it, as it's one and only one - WiFi shouldn't be listed."""
-        source_list = self._source_list.copy()
-        if 'wifi' in source_list:
-            del source_list['wifi']
-
+        """Return the list of available input sources."""
         if len(self._source_list) > 0:
-            return list(source_list.values())
-        else:
-            return None
+            return list(self._source_list.values())
+        return None
 
     @property
     def sound_mode(self):
         """Return the current sound mode."""
+        if isinstance(self._sound_statdata, dict) and 'sound program' in self._sound_statdata:
+            return self._sound_statdata['sound program']
         return self._sound_mode
 
     @property
     def sound_mode_list(self):
         """Return the available sound modes."""
-        return sorted(list(SOUND_MODES.values()))
+        return list(YAMAHA_SOUND_PROGRAMS)
 
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
@@ -1643,18 +1591,21 @@ class YamahaDevice(MediaPlayerEntity):
             await self._master.async_select_source(source)
 
     async def async_select_sound_mode(self, sound_mode):
-        """Set Sound Mode for device."""
+        """Set Sound Mode for device via YAMAHA_DATA_SET."""
         if not self._slave_mode:
-            mode = list(SOUND_MODES.keys())[list(
-                SOUND_MODES.values()).index(sound_mode)]
-            value = await self.async_call_yamaha_httpapi("setPlayerCmd:equalizer:{0}".format(mode), None)
-            if value == "OK":
-                self._sound_mode = sound_mode
-                if self._slave_list is not None:
-                    for slave in self._slave_list:
-                        await slave.async_set_sound_mode(sound_mode)
-            else:
+            encoded = sound_mode.replace(' ', '%20')
+            cmd = f'YAMAHA_DATA_SET:{{%22sound%20program%22:%22{encoded}%22}}'
+            value = await self.async_call_yamaha_httpapi(cmd, None)
+            if value != "OK":
                 _LOGGER.warning("Failed to set sound mode. Device: %s, Got response: %s", self.entity_id, value)
+                return
+            self._sound_mode = sound_mode
+            if isinstance(self._sound_statdata, dict):
+                self._sound_statdata['sound program'] = sound_mode
+            self._sound_statdata_updated_at = utcnow()
+            if self._slave_list is not None:
+                for slave in self._slave_list:
+                    await slave.async_set_sound_mode(sound_mode)
         else:
             await self._master.async_select_sound_mode(sound_mode)
 
@@ -1731,10 +1682,14 @@ class YamahaDevice(MediaPlayerEntity):
 
     async def async_mute_volume(self, mute):
         """Mute (true) or unmute (false) media player."""
-        value = await self.async_call_yamaha_httpapi("setPlayerCmd:mute:{0}".format(str(int(mute))), None)
-
+        val = "1" if mute else "0"
+        value = await self.async_call_yamaha_httpapi(
+            f'YAMAHA_DATA_SET:{{%22mute%22:%22{val}%22}}', None
+        )
         if value == "OK":
             self._muted = bool(int(mute))
+            if isinstance(self._sound_statdata, dict):
+                self._sound_statdata['mute'] = val
 
     async def async_turn_on(self):
         """Use Mune/Unmute instead, because power is not supported."""
@@ -2300,7 +2255,7 @@ class YamahaDevice(MediaPlayerEntity):
 
     async def async_join_players(self, slaves):
         """Join `group_members` as a player group with the current player (standard HA)."""
-        entities = self.hass.data[DOMAIN].entities
+        entities = self.hass.data[DOMAIN]["entities"]
         entities = [e for e in entities if e.entity_id in slaves]
         await self.async_join(entities)
 
@@ -2376,7 +2331,7 @@ class YamahaDevice(MediaPlayerEntity):
         if value == "OK":
             self._is_master = False
             for slave_id in self._multiroom_group:
-                for device in self.hass.data[DOMAIN].entities:
+                for device in self.hass.data[DOMAIN]["entities"]:
                     if device.entity_id == slave_id and device.entity_id != self.entity_id:
                         await device.async_set_slave_mode(False)
                         await device.async_set_is_master(False)
@@ -2404,7 +2359,7 @@ class YamahaDevice(MediaPlayerEntity):
         """Disconnect myself from the multiroom configuration."""
         if self._multiroom_wifidirect:
             for dev in self._multiroom_group:
-                for device in self.hass.data[DOMAIN].entities:
+                for device in self.hass.data[DOMAIN]["entities"]:
                     if device._is_master:    ## TODO!!!
                         cmd = "multiroom:SlaveKickout:{0}".format(self._slave_ip)
                         value = await self._master.async_call_yamaha_httpapi(cmd, None)
@@ -2441,7 +2396,7 @@ class YamahaDevice(MediaPlayerEntity):
             self._slave_list = None
 
         for member in self._multiroom_group:
-            for player in self.hass.data[DOMAIN].entities:
+            for player in self.hass.data[DOMAIN]["entities"]:
                 if player.entity_id == member and player.entity_id != self.entity_id:
                     await player.async_set_multiroom_group(self._multiroom_group)
 #                    await player.async_trigger_schedule_update(True)

@@ -1,0 +1,9 @@
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    network_mode: host
+    volumes:
+      - ./ha-config:/config
+      - ./custom_components/yamaha_soundbar:/config/custom_components/yamaha_soundbar
+    restart: unless-stopped
